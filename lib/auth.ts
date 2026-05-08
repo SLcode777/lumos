@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth"
 import { prismaAdapter } from "better-auth/adapters/prisma"
 import { prisma } from "./prisma"
+import { checkRegistrationAllowed } from "./registration"
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -28,6 +29,18 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
+          // First-line defense against bypass attempts (e.g. OAuth callbacks
+          // hitting the user-create path without going through /signup).
+          // The page-level check in /signup already enforces this for
+          // email/password. This hook covers any other code path.
+          //
+          // Note: the OAuth invitation-token plumbing (passing the token
+          // through the OAuth state) is implemented in #5/#6/#12.
+          const result = await checkRegistrationAllowed(undefined)
+          if (!result.allowed) {
+            throw new Error(`Registration not allowed (${result.reason})`)
+          }
+
           // Count existing users. If this is the very first one, promote to admin.
           // First-signup race accepted for MVP: self-hosted instances are
           // bootstrapped by a single deployer, so concurrent first-signups

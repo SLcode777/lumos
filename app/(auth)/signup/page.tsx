@@ -1,89 +1,48 @@
-"use client"
-
-import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { checkRegistrationAllowed } from "@/lib/registration"
+import { SignUpForm } from "./signup-form"
 
-import { signUp } from "@/lib/auth-client"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+type SignUpPageProps = {
+  searchParams: Promise<{ token?: string }>
+}
 
-export default function SignUpPage() {
-  const router = useRouter()
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [pending, setPending] = useState(false)
+export default async function SignUpPage({ searchParams }: SignUpPageProps) {
+  const { token } = await searchParams
+  const result = await checkRegistrationAllowed(token)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setPending(true)
-
-    const { error } = await signUp.email({
-      email,
-      password,
-      name: name || email.split("@")[0],
-    })
-
-    setPending(false)
-
-    if (error) {
-      setError(error.message ?? "Sign-up failed")
-      return
-    }
-
-    router.push("/dashboard")
+  if (!result.allowed) {
+    return <RegistrationBlocked reason={result.reason} />
   }
 
+  return <SignUpForm token={token} />
+}
+
+function RegistrationBlocked({ reason }: { reason: "closed" | "invite-only-no-token" | "invite-only-invalid-token" }) {
+  const messages = {
+    closed: {
+      title: "Registration is closed",
+      description: "This Lumos instance is not accepting new sign-ups right now.",
+    },
+    "invite-only-no-token": {
+      title: "This Lumos instance is invite-only",
+      description: "Ask your administrator for an invitation link, then return here using that URL.",
+    },
+    "invite-only-invalid-token": {
+      title: "Invitation link is invalid",
+      description:
+        "This invitation link is invalid, expired, or has already been used. Ask your administrator for a fresh one.",
+    },
+  } as const
+
+  const { title, description } = messages[reason]
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2 text-center">
-        <h1 className="font-serif text-3xl tracking-tight">Create your account</h1>
-        <p className="text-sm text-muted-foreground">Welcome to Lumos. Just an email and a password.</p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <Input
-          type="text"
-          placeholder="Name (optional)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-        />
-        <Input
-          type="email"
-          placeholder="Email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-        />
-        <Input
-          type="password"
-          placeholder="Password (8+ characters)"
-          required
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
-        />
-
-        {error && (
-          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {error}
-          </p>
-        )}
-
-        <Button type="submit" disabled={pending}>
-          {pending ? "Creating account…" : "Create account"}
-        </Button>
-      </form>
-
-      <p className="text-center text-sm text-muted-foreground">
+    <div className="flex flex-col gap-6 text-center">
+      <h1 className="font-serif text-3xl tracking-tight">{title}</h1>
+      <p className="text-sm text-muted-foreground">{description}</p>
+      <p className="text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/signin" className="text-foreground hover:underline">
+        <Link href="/sign-in" className="text-foreground hover:underline">
           Sign in
         </Link>
       </p>
