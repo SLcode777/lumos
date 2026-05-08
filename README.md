@@ -22,6 +22,31 @@ The project is in design and early development. Not yet usable.
 
 > ⚠️ **Heads-up:** the npm scripts in this repo (`pnpm dev`, `pnpm db:up`, etc.) are **pre-wrapped with `infisical run --env=dev --`** because the maintainer uses [Infisical](https://infisical.com/) for secret management. Pick the option that fits your workflow before running the setup steps below.
 
+#### Required environment variables
+
+Whichever option you pick below, your `dev` environment must define:
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Prisma connection string for the application database (e.g. `postgresql://lumos:<password>@localhost:5433/lumos?schema=public`) |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` | Used by Docker Compose to bootstrap the application Postgres container |
+| `BETTER_AUTH_SECRET` | Random 32-byte secret used by Better Auth to sign sessions |
+| `BETTER_AUTH_URL` | Public URL of this Lumos instance (e.g. `http://localhost:3000` in dev) |
+| `REGISTRATION_MODE` | `open`, `invite-only` (default), or `closed` — controls how new users can sign up |
+| `ENCRYPTION_KEY` | AES-256 key (32 bytes, base64) used to encrypt user-saved PostgreSQL connection strings at rest |
+
+**Generating secrets**
+
+```bash
+# BETTER_AUTH_SECRET, ENCRYPTION_KEY (any 32-byte base64 secret)
+openssl rand -base64 32
+
+# POSTGRES_PASSWORD (alphanumeric, URL-safe in connection strings)
+pwgen -sB 32 1
+```
+
+> ⚠️ Keep `ENCRYPTION_KEY` and `BETTER_AUTH_SECRET` confidential. Losing `ENCRYPTION_KEY` means losing access to all stored connection strings. Rotating it requires re-encrypting existing rows.
+
 #### Option A — Use Infisical (no changes needed)
 
 If you already use Infisical (self-hosted or cloud):
@@ -31,10 +56,7 @@ infisical login
 infisical init   # link this folder to your Infisical project
 ```
 
-Make sure your Infisical `dev` environment defines:
-`DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`.
-
-The npm scripts will inject your secrets automatically at runtime.
+Define the variables above in your Infisical `dev` environment. The npm scripts will inject them automatically at runtime.
 
 #### Option B — Use a plain `.env` file
 
@@ -49,12 +71,11 @@ If you don't use Infisical, the wrapped scripts will fail (the `infisical` CLI w
 | `"db:studio": "infisical run --env=dev -- prisma studio"` | `"db:studio": "prisma studio"` |
 | `"db:reset": "infisical run --env=dev -- prisma migrate reset"` | `"db:reset": "prisma migrate reset"` |
 
-Then create your `.env` from the template:
+Then create your `.env` from the template and fill in every variable listed above:
 
 ```bash
 cp .env.example .env
-# Edit .env and fill in: DATABASE_URL, POSTGRES_USER, POSTGRES_PASSWORD,
-# POSTGRES_DB, POSTGRES_PORT
+# Edit .env with your generated secrets and connection details
 ```
 
 Both Next.js and Prisma will pick up the values from `.env` automatically.
