@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Signaler un bug ou un comportement inattendu
+about: Report a bug or unexpected behavior
 title: '[Bug] '
 labels: bug
 assignees: ''
@@ -8,31 +8,29 @@ assignees: ''
 
 ## Description
 
-<!-- Description claire et concise du bug. -->
+<!-- Clear and concise description of the bug. -->
 
-## Reproduction
+## Steps to reproduce
 
-Étapes pour reproduire le bug :
+1. Go to '...'
+2. Click on '...'
+3. See the error
 
-1. Aller sur '...'
-2. Cliquer sur '...'
-3. Voir l'erreur
+## Expected behavior
 
-## Comportement attendu
+<!-- What should happen instead. -->
 
-<!-- Ce qui devrait se passer. -->
+## Screenshots
 
-## Captures d'écran
+<!-- If applicable, add screenshots. -->
 
-<!-- Si applicable, ajouter des captures d'écran. -->
+## Environment
 
-## Environnement
+- OS: [e.g. macOS 14, Ubuntu 22.04, Windows 11]
+- Browser + version: [e.g. Chrome 120]
+- Lumos version: [e.g. v0.1.0 or commit SHA]
+- Target database: [e.g. PostgreSQL 15 on Neon]
 
-- OS : [ex: macOS 14, Ubuntu 22.04, Windows 11]
-- Navigateur + version : [ex: Chrome 120]
-- Version de Lumos : [ex: v0.1.0 ou commit sha]
-- BDD ciblée : [ex: PostgreSQL 15 sur Neon]
+## Additional context
 
-## Contexte additionnel
-
-<!-- Tout autre détail utile. Logs, messages d'erreur, etc. -->
+<!-- Anything else useful: logs, error messages, etc. -->

@@ -1,30 +1,30 @@
 ---
 name: Feature request
-about: Proposer une nouvelle fonctionnalité ou amélioration
+about: Suggest a new feature or improvement
 title: '[Feature] '
 labels: feature
 assignees: ''
 ---
 
-## Problème / besoin
+## Problem / need
 
-<!-- Quel problème cette feature résout-elle ? Quel est le contexte ? -->
+<!-- What problem does this feature solve? What's the context? -->
 
-## Solution proposée
+## Proposed solution
 
-<!-- Description claire de ce que tu aimerais voir. -->
+<!-- Clear description of what you'd like to see. -->
 
-## Alternatives envisagées
+## Alternatives considered
 
-<!-- D'autres approches possibles, et pourquoi celle proposée est préférable. -->
+<!-- Other approaches you considered, and why the proposed one is preferable. -->
 
 ## Impact
 
-- [ ] Concerne tous les users
-- [ ] Concerne uniquement les admins
-- [ ] Concerne les owners de connexions
-- [ ] Concerne les viewers de connexions partagées
+- [ ] Affects all users
+- [ ] Affects only admins
+- [ ] Affects connection owners
+- [ ] Affects viewers of shared connections
 
-## Contexte additionnel
+## Additional context
 
-<!-- Mockups, références à d'autres outils, etc. -->
+<!-- Mockups, references to other tools, etc. -->

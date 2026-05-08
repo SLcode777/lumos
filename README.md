@@ -1,20 +1,20 @@
 # Lumos
 
-> Un navigateur PostgreSQL web — simple, élégant, agréable à utiliser.
+> A web-based PostgreSQL browser — simple, elegant, pleasant to use.
 
-Lumos permet de se connecter à n'importe quelle base PostgreSQL et d'en explorer visuellement le contenu (tables, colonnes, relations, données) depuis un navigateur, sur n'importe quel OS.
+Lumos lets you connect to any PostgreSQL database and visually explore its contents (tables, columns, relations, data) from a browser, on any OS.
 
-## Statut
+## Status
 
 🚧 **Pre-alpha — work in progress.**
 
-Le projet est en phase de conception et de développement initial. Pas encore utilisable.
+The project is in design and early development. Not yet usable.
 
 ## Documentation
 
-- [PRD](./PRD.md) — Vision produit, stack technique, architecture, modèle de données, roadmap.
-- [CONTRIBUTING](./CONTRIBUTING.md) — Comment contribuer (à venir).
+- [PRD](./PRD.md) — Product vision, technical stack, architecture, data model, roadmap. *(Written in French.)*
+- [CONTRIBUTING](./CONTRIBUTING.md) — How to contribute (work in progress).
 
-## Licence
+## License
 
 [MIT](./LICENSE)
