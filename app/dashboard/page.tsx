@@ -15,6 +15,9 @@ export default async function DashboardPage() {
       <main className="flex flex-1 items-center justify-center p-6">
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="font-serif text-4xl tracking-tight">Welcome, {session.user.name ?? session.user.email}</h1>
+          <p className="text-sm text-muted-foreground">
+            Your role: <code>{session.user.role ?? "unknown"}</code>
+          </p>
           <p className="text-sm text-muted-foreground">This is a placeholder. The real dashboard ships in issue #13.</p>
         </div>
       </main>

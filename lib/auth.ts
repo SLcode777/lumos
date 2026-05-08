@@ -15,4 +15,39 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // refresh the session if older than 1 day
   },
+  user: {
+    additionalFields: {
+      role: {
+        type: "string",
+        defaultValue: "user",
+        input: false, // security: users can NOT set their own role via the sign-up payload
+      },
+    },
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          // Count existing users. If this is the very first one, promote to admin.
+          // First-signup race accepted for MVP: self-hosted instances are
+          // bootstrapped by a single deployer, so concurrent first-signups
+          // don't happen in practice. Tighten with pg_advisory_xact_lock if
+          // the deployment model ever changes.
+          const userCount = await prisma.user.count()
+
+          if (userCount === 0) {
+            return {
+              data: {
+                ...user,
+                role: "admin",
+              },
+            }
+          }
+
+          // Otherwise, let the default ("user") apply.
+          return { data: user }
+        },
+      },
+    },
+  },
 })
