@@ -1,0 +1,23 @@
+services:
+  postgres-app:
+    image: postgres:16-alpine
+    container_name: lumos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lumos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumos}
+      POSTGRES_DB: ${POSTGRES_DB:-lumos}
+    ports:
+      # Host port 5433 by default to avoid collisions with a local Postgres on 5432.
+      # Override with POSTGRES_PORT in .env if needed.
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres-app-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lumos} -d ${POSTGRES_DB:-lumos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-app-data:

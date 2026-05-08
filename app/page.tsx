@@ -3,6 +3,7 @@ import { Eye, FileText, Code, Pencil, Sparkles } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
+import Image from "next/image"
 
 const REPO_URL = "https://github.com/SLcode777/lumos"
 
@@ -42,10 +43,13 @@ export default function Page() {
       <main className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="flex w-full max-w-xl flex-col gap-10">
           <div className="flex flex-col items-center gap-5 text-center">
-            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+            <span className="mb-6 rounded-full border border-border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
               🚧 Pre-alpha — work in progress
             </span>
-            <h1 className="font-serif text-6xl leading-none tracking-tight sm:text-7xl">Lumos</h1>
+            <div className="flex flex-row items-center">
+              <Image src={"/logo.png"} alt="logo" width={100} height={100} className="-mx-10 -mt-18" />
+              <h1 className="font-serif text-6xl leading-none tracking-tight sm:text-7xl">Lumos</h1>
+            </div>
             <p className="text-base text-balance text-muted-foreground sm:text-lg">
               A web-based PostgreSQL browser. Connect, explore, and edit any Postgres database from your browser —
               simple, elegant, pleasant to use.

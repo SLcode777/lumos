@@ -4,14 +4,21 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "infisical run --env=dev -- next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "infisical run --env=dev -- prisma migrate dev",
+    "db:studio": "infisical run --env=dev -- prisma studio",
+    "db:reset": "infisical run --env=dev -- prisma migrate reset",
+    "db:up": "infisical run --env=dev -- docker compose up -d postgres-app",
+    "db:down": "infisical run --env=dev -- docker compose down",
+    "db:logs": "docker compose logs -f postgres-app"
   },
   "dependencies": {
+    "@prisma/client": "^7.8.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
@@ -30,11 +37,13 @@
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "dotenv": "^17.4.2",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.1.7",
     "postcss": "^8",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
+    "prisma": "^7.8.0",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3"
   }
