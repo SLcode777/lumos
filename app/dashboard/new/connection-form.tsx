@@ -1,18 +1,27 @@
 "use client"
 
-import { useActionState, useState } from "react"
-
+import { startTransition, useActionState, useRef, useState } from "react"
+import { CheckCircle2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-
-import { createConnectionAction, type CreateConnectionState } from "./actions"
+import {
+  createConnectionAction,
+  testConnectionAction,
+  type TestConnectionState,
+  type CreateConnectionState,
+} from "./actions"
 
 export function ConnectionForm() {
   const [state, formAction, pending] = useActionState<CreateConnectionState, FormData>(createConnectionAction, {})
+  const [testState, testFormAction, testPending] = useActionState<TestConnectionState, FormData>(
+    testConnectionAction,
+    null
+  )
+  const formRef = useRef<HTMLFormElement>(null)
   const [mode, setMode] = useState<"url" | "fields">("url")
   const [sslEnabled, setSslEnabled] = useState(true)
   const [isReadOnly, setIsReadOnly] = useState(true)
@@ -20,7 +29,7 @@ export function ConnectionForm() {
   const fieldErrors = state?.fieldErrors ?? {}
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form ref={formRef} action={formAction} className="space-y-6">
       {/* Hidden controls reflecting React state into the FormData payload */}
       <input type="hidden" name="mode" value={mode} />
       <input type="hidden" name="sslEnabled" value={sslEnabled ? "on" : "off"} />
@@ -130,7 +139,10 @@ export function ConnectionForm() {
         />
       </div>
 
-      {/* Submit + form-level error */}
+      {/* Test result */}
+      {testState ? <TestResult state={testState} /> : null}
+
+      {/* Form-level error */}
       {state?.formError ? (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
           {state.formError}
@@ -138,7 +150,21 @@ export function ConnectionForm() {
       ) : null}
 
       <div className="flex justify-end gap-2">
-        <Button type="submit" disabled={pending}>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={testPending || pending}
+          onClick={() => {
+            if (!formRef.current) return
+            const fd = new FormData(formRef.current)
+            startTransition(() => {
+              testFormAction(fd)
+            })
+          }}
+        >
+          {testPending ? "Testing…" : "Test connection"}
+        </Button>
+        <Button type="submit" disabled={pending || testPending}>
           {pending ? "Saving…" : "Save connection"}
         </Button>
       </div>
@@ -172,6 +198,23 @@ function ToggleRow({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  )
+}
+
+function TestResult({ state }: { state: NonNullable<TestConnectionState> }) {
+  if (state.ok) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-emerald-500/50 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400">
+        <CheckCircle2 className="h-4 w-4 shrink-0" />
+        <span>Connection successful.</span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+      <XCircle className="h-4 w-4 shrink-0" />
+      <span>{state.error}</span>
     </div>
   )
 }

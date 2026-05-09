@@ -1,3 +1,5 @@
+import { Client as PgClient } from "pg"
+
 import { decrypt } from "@/lib/crypto"
 import { prisma } from "@/lib/prisma"
 
@@ -173,4 +175,127 @@ function safeExtractHost(
     )
     return "—"
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// testConnection — opens a one-shot pg.Client, runs SELECT 1, returns ok/ko.
+// Sanitizes errors so no IPs, hostnames, usernames, or stack traces leak to
+// the client. Used by #15 (test-connection action) and reusable elsewhere.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TEST_TIMEOUT_MS = 5000
+const HARD_TIMEOUT_MS = 5500
+
+export type TestConnectionResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * Tries to connect to the given Postgres URL and run `SELECT 1`. Always
+ * resolves (never throws). On failure, returns a sanitized message safe to
+ * show in the UI.
+ *
+ * NEVER logs the connection string in any branch.
+ */
+export async function testConnection(
+  connectionString: string,
+  sslEnabled: boolean
+): Promise<TestConnectionResult> {
+  const client = new PgClient({
+    connectionString,
+    connectionTimeoutMillis: TEST_TIMEOUT_MS,
+    statement_timeout: TEST_TIMEOUT_MS,
+    // For self-hosted DBs with self-signed certs. MITM protection is weak
+    // here; a future issue can add an optional CA bundle per connection.
+    ssl: sslEnabled ? { rejectUnauthorized: false } : false,
+  })
+
+  try {
+    await raceWithHardTimeout(
+      (async () => {
+        await client.connect()
+        await client.query("SELECT 1")
+      })(),
+      HARD_TIMEOUT_MS
+    )
+    return { ok: true }
+  } catch (err) {
+    // Server-side log: error code/name only, NEVER the connection string.
+    console.warn(
+      "[testConnection] failed:",
+      err instanceof Error ? `${err.name}/${(err as { code?: string }).code ?? "?"}: ${err.message}` : err
+    )
+    return { ok: false, error: sanitizeConnectionError(err) }
+  } finally {
+    // Best-effort cleanup. `end()` rejects if the client never connected,
+    // which is fine — we ignore.
+    try {
+      await client.end()
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function raceWithHardTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new HardTimeoutError()), ms)
+    p.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      }
+    )
+  })
+}
+
+class HardTimeoutError extends Error {
+  constructor() {
+    super("Hard timeout")
+    this.name = "HardTimeoutError"
+  }
+}
+
+// SQLSTATE codes from the PostgreSQL protocol.
+// https://www.postgresql.org/docs/current/errcodes-appendix.html
+const PG_SQLSTATE_MESSAGES: Record<string, string> = {
+  "28P01": "Authentication failed (wrong username or password)",
+  "28000": "Authentication failed",
+  "3D000": "Database does not exist",
+  "08001": "Could not establish connection to the server",
+  "08006": "Connection failure",
+  "08004": "Server rejected the connection",
+  "53300": "Server has too many connections",
+  "57P03": "Server is starting up — try again in a moment",
+}
+
+// Node net/tls error codes. Avoid including err.address / err.port from the
+// raw error — those leak topology.
+const NODE_ERROR_MESSAGES: Record<string, string> = {
+  ECONNREFUSED: "Connection refused — is the server running and reachable?",
+  ENOTFOUND: "Host not found — check the hostname",
+  ETIMEDOUT: "Connection timed out",
+  EHOSTUNREACH: "Host unreachable",
+  ENETUNREACH: "Network unreachable",
+  ECONNRESET: "Connection reset by peer",
+  EPIPE: "Connection closed unexpectedly",
+  CERT_HAS_EXPIRED: "SSL certificate has expired",
+  DEPTH_ZERO_SELF_SIGNED_CERT: "SSL certificate is self-signed",
+  SELF_SIGNED_CERT_IN_CHAIN: "SSL certificate chain contains a self-signed certificate",
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE: "Could not verify the SSL certificate",
+}
+
+function sanitizeConnectionError(err: unknown): string {
+  if (err instanceof HardTimeoutError) {
+    return "Connection timed out after 5 seconds"
+  }
+  if (err && typeof err === "object" && "code" in err) {
+    const code = String((err as { code?: unknown }).code ?? "")
+    if (code in PG_SQLSTATE_MESSAGES) return PG_SQLSTATE_MESSAGES[code]
+    if (code in NODE_ERROR_MESSAGES) return NODE_ERROR_MESSAGES[code]
+  }
+  // Fallback: generic message, no detail. The server log has the real cause.
+  return "Connection failed"
 }

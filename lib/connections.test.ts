@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildConnectionStringFromFields, parseConnectionString } from "@/lib/connections"
+import { buildConnectionStringFromFields, parseConnectionString, testConnection } from "@/lib/connections"
 
 describe("parseConnectionString", () => {
   it("accepts a standard postgresql:// URL", () => {
@@ -96,4 +96,17 @@ describe("buildConnectionStringFromFields", () => {
     })
     expect(url).toContain(":6543/")
   })
+})
+
+describe("testConnection", () => {
+  it("returns ok for a valid local connection", async () => {
+    // Reuse the dev connection string from DATABASE_URL (set by Infisical).
+    const url = process.env.DATABASE_URL
+    if (!url) {
+      throw new Error("DATABASE_URL not set — run via `pnpm test`")
+    }
+    // Local dev DB doesn't have SSL configured.
+    const result = await testConnection(url, false)
+    expect(result).toEqual({ ok: true })
+  }, 10_000) // generous timeout — connect can be slow on first run
 })
