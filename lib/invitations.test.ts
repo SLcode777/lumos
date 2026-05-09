@@ -138,8 +138,9 @@ describe("listInvitations / revokeInvitation", () => {
   it("lists with computed status", async () => {
     await createInvitation({ invitedById: adminId, email: "a@x.com" })
     const list = await listInvitations()
-    expect(list[0]?.status).toBe("pending")
-    expect(list[0]?.invitedByEmail).toBe("test-admin@lumos.local")
+    const found = list.find((inv) => inv.email === "a@x.com")
+    expect(found?.status).toBe("pending")
+    expect(found?.invitedByEmail).toBe("test-admin@lumos.local")
   })
 
   it("revokes a pending invitation", async () => {

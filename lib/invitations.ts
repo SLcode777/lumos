@@ -167,7 +167,7 @@ function statusOf(row: { consumedAt: Date | null; expiresAt: Date }): Invitation
  */
 export async function listInvitations(): Promise<InvitationListItem[]> {
   const rows = await prisma.invitation.findMany({
-    orderBy: [{ consumedAt: "asc" }, { createdAt: "desc" }],
+    orderBy: [{ consumedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
     select: {
       id: true,
       email: true,
