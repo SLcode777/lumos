@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 
 import { signOut } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
@@ -23,7 +24,10 @@ export function AppHeader({ user }: AppHeaderProps) {
 
   return (
     <header className="flex items-center justify-between border-b border-border p-4">
-      <span className="font-serif text-xl tracking-tight">Lumos</span>
+      <div className="flex flex-row items-center">
+        <Image src={"/logo.png"} alt="logo" width={50} height={50} className="" />
+        <span className="font-serif text-3xl tracking-tight">Lumos</span>
+      </div>
       <div className="flex items-center gap-3">
         <span className="text-sm text-muted-foreground">{user.name ?? user.email}</span>
         <Button variant="ghost" size="sm" onClick={handleSignOut}>

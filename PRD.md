@@ -230,7 +230,19 @@ model TableLayout {
 | Sidebar | Liste des tables avec le nombre de lignes (via `pg_stat_user_tables` ou `COUNT(*)`). Recherche rapide pour filtrer les tables. |
 | Cache du schéma | Le schéma est mis en cache côté client (React state/context) pour éviter de le re-fetcher à chaque navigation. Bouton "Refresh" pour forcer la mise à jour. |
 
-### Phase 3 — Partage de connexions
+### Phase 3 — Browsing des données
+
+**Objectif** : afficher les données d'une table dans un data grid navigable.
+
+| Fonctionnalité | Détail |
+|---|---|
+| Data grid | Affichage tabulaire des records avec colonnes redimensionnables. |
+| Pagination | Pagination côté serveur (LIMIT/OFFSET ou cursor-based). Taille de page configurable (25, 50, 100). |
+| Tri | Clic sur un header de colonne pour trier ASC/DESC. Envoi d'un `ORDER BY` côté serveur. |
+| Affichage type-aware | Rendu adapté selon le type : dates formatées, booleans en badges, JSON en code block collapsible, URLs cliquables, images en preview si c'est une URL d'image. |
+| Vue détail | Clic sur un record → panneau latéral ou modal affichant tous les champs du record, y compris les champs longs (texte, JSON). |
+
+### Phase 4 — Partage de connexions
 
 **Objectif** : un owner peut partager une de ses connexions à d'autres users de l'instance, qui pourront alors la browse en lecture seule sans jamais voir les credentials.
 
@@ -242,18 +254,6 @@ model TableLayout {
 | Vue côté viewer | Dans le dashboard, badge "Partagé par [nom de l'owner]" sur les connexions reçues. Pas d'accès aux paramètres de connexion (formulaire credentials caché). |
 | Sécurité serveur | À chaque requête sur une connexion, le serveur vérifie que l'user est soit l'owner, soit présent dans `ConnectionAccess` pour cette connexion. Sinon → 403. La vérification du rôle (`viewer` vs `owner`) gate les actions d'édition et de partage. |
 | Évolution future | Le rôle `editor` (peut browse + éditer les données mais pas re-partager) est prévu pour une phase ultérieure, en lien avec l'édition inline (Phase 7). |
-
-### Phase 4 — Browsing des données
-
-**Objectif** : afficher les données d'une table dans un data grid navigable.
-
-| Fonctionnalité | Détail |
-|---|---|
-| Data grid | Affichage tabulaire des records avec colonnes redimensionnables. |
-| Pagination | Pagination côté serveur (LIMIT/OFFSET ou cursor-based). Taille de page configurable (25, 50, 100). |
-| Tri | Clic sur un header de colonne pour trier ASC/DESC. Envoi d'un `ORDER BY` côté serveur. |
-| Affichage type-aware | Rendu adapté selon le type : dates formatées, booleans en badges, JSON en code block collapsible, URLs cliquables, images en preview si c'est une URL d'image. |
-| Vue détail | Clic sur un record → panneau latéral ou modal affichant tous les champs du record, y compris les champs longs (texte, JSON). |
 
 ### Phase 5 — Filtrage et recherche
 
@@ -434,8 +434,8 @@ model TableLayout {
 |---|---|---|
 | **Phase 1** | Auth (Better Auth, OAuth GitHub/GitLab inclus) + invitations admin + dashboard connexions + chiffrement | 🔴 Critique |
 | **Phase 2** | Introspection du schéma + sidebar | 🔴 Critique |
-| **Phase 3** | Partage de connexions (rôle viewer) + isolation par user | 🔴 Critique |
-| **Phase 4** | Data grid + pagination + tri + vue détail | 🔴 Critique |
+| **Phase 3** | Data grid + pagination + tri + vue détail | 🔴 Critique |
+| **Phase 4** | Partage de connexions (rôle viewer) + isolation par user | 🔴 Critique |
 | **Phase 5** | Filtrage type-aware + recherche | 🟠 Haute |
 | **Phase 6** | Navigation relationnelle (FK) + breadcrumb | 🟠 Haute |
 | **Phase 7** | Édition inline | 🟡 Moyenne |

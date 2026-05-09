@@ -3,10 +3,12 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState, useTransition } from "react"
-import { RefreshCw, Search, Table as TableIcon } from "lucide-react"
+import { RefreshCw, Search } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { getTableIcon } from "@/lib/table-icon"
+
 import { refreshSchemaAction } from "./actions"
 
 type GroupedTable = {
@@ -83,6 +85,7 @@ export function SidebarClient({ connectionId, groupedTables, showSchemaHeaders }
                 <ul className="space-y-0.5">
                   {group.tables.map((t) => {
                     const isActive = activeTable === t.name
+                    const Icon = getTableIcon(t.name)
                     return (
                       <li key={`${group.schema}.${t.name}`}>
                         <Link
@@ -93,7 +96,7 @@ export function SidebarClient({ connectionId, groupedTables, showSchemaHeaders }
                           }`}
                         >
                           <span className="flex items-center gap-2 truncate">
-                            <TableIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                            <Icon className="h-3.5 w-3.5 shrink-0 opacity-60" />
                             <span className="truncate">{t.name}</span>
                           </span>
                           <span className="shrink-0 font-mono text-xs text-muted-foreground">
