@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { AlertTriangle, ArrowLeft } from "lucide-react"
 
 import { AppHeader } from "@/components/app-header"
 import { Badge } from "@/components/ui/badge"
@@ -8,16 +8,16 @@ import { Button } from "@/components/ui/button"
 import { AccessError } from "@/lib/access"
 import { decrypt } from "@/lib/crypto"
 import { getSession } from "@/lib/get-session"
+import { introspectSchema, type DatabaseSchema } from "@/lib/introspect"
 import { loadConnection } from "@/lib/load-connection"
 import { getConnectionPool } from "@/lib/pool-manager"
+
+import { Sidebar } from "./sidebar"
 
 export default async function ConnectionLayout({
   children,
   params,
-}: {
-  children: React.ReactNode
-  params: Promise<{ id: string }>
-}) {
+}: LayoutProps<"/dashboard/connections/[id]">) {
   const session = await getSession()
   const { id } = await params
 
@@ -41,9 +41,20 @@ export default async function ConnectionLayout({
     iv: conn.iv,
     authTag: conn.authTag,
   })
-  // Warming is cheap: pg.Pool doesn't connect at construction. The first
-  // `pool.query(...)` in #23 will trigger the actual TCP handshake.
-  getConnectionPool(conn.id, connectionString, conn.sslEnabled)
+
+  const pool = getConnectionPool(conn.id, connectionString, conn.sslEnabled)
+
+  // Run introspection here so we can render an in-place fallback if it fails
+  // (DB unreachable, auth denied, timeout). same-segment error.tsx doesn't
+  // catch errors thrown from the layout itself or its imported components,
+  // so we have to handle this inline. Keeping the header visible gives the
+  // user a back link + connection context while the sidebar shows the error.
+  let schema: DatabaseSchema | null = null
+  try {
+    schema = await introspectSchema(pool)
+  } catch (err) {
+    console.error("[connection-detail] introspection failed:", err instanceof Error ? err.message : err)
+  }
 
   // Re-extract the host for the header (UI-friendly, no decrypted secret).
   let host = "—"
@@ -77,15 +88,28 @@ export default async function ConnectionLayout({
         </header>
 
         <div className="flex flex-1">
-          {/* Sidebar slot — placeholder for #21, replaced in #23 */}
-          <aside className="w-64 shrink-0 border-r border-border bg-muted/30 p-4">
-            <p className="text-sm text-muted-foreground">Tables list comes in #23.</p>
-          </aside>
+          {schema ? (
+            <Sidebar schema={schema} connectionId={conn.id} />
+          ) : (
+            <SidebarErrorFallback />
+          )}
 
           {/* Main content slot */}
           <section className="flex-1">{children}</section>
         </div>
       </main>
     </div>
+  )
+}
+
+function SidebarErrorFallback() {
+  return (
+    <aside className="flex w-64 shrink-0 flex-col items-center justify-center border-r border-border bg-muted/30 p-4 text-center">
+      <AlertTriangle className="h-8 w-8 text-destructive" />
+      <p className="mt-3 text-sm font-medium">Couldn&apos;t load tables</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        The database is unreachable or rejected the connection. Check the credentials and try again.
+      </p>
+    </aside>
   )
 }
