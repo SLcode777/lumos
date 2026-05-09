@@ -42,7 +42,7 @@ function RegistrationBlocked({ reason }: { reason: "closed" | "invite-only-no-to
       <p className="text-sm text-muted-foreground">{description}</p>
       <p className="text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/sign-in" className="text-foreground hover:underline">
+        <Link href="/signin" className="text-foreground hover:underline">
           Sign in
         </Link>
       </p>

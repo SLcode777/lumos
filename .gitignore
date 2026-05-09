@@ -55,5 +55,6 @@ Thumbs.db
 
 # Local Claude Code workspace
 .claude/
+CLAUDE.local.md
 
 /generated/prisma

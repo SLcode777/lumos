@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { verifyInvitationToken } from "./invitations"
 
 const VALID_MODES = ["open", "invite-only", "closed"] as const
 
@@ -55,9 +56,13 @@ export async function checkRegistrationAllowed(token?: string): Promise<Registra
     return { allowed: false, reason: "invite-only-no-token" }
   }
 
-  // TODO(issue #10/#12): actually validate the token against the Invitation table
-  // (check tokenHash matches, expiresAt > now, consumedAt is null) and consume it
-  // atomically on successful sign-up. Until then, all invite-only sign-ups with a
-  // token still get rejected here.
-  return { allowed: false, reason: "invite-only-invalid-token" }
+  const invitation = await verifyInvitationToken(token)
+  if (!invitation) {
+    return { allowed: false, reason: "invite-only-invalid-token" }
+  }
+
+  // TODO(issue #12): consume the token atomically inside the user-creation transaction
+  // (databaseHooks.user.create.before in lib/auth.ts).
+
+  return { allowed: true, reason: "valid-token" }
 }

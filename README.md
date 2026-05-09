@@ -34,6 +34,7 @@ Whichever option you pick below, your `dev` environment must define:
 | `BETTER_AUTH_URL` | Public URL of this Lumos instance (e.g. `http://localhost:3000` in dev) |
 | `REGISTRATION_MODE` | `open`, `invite-only` (default), or `closed` — controls how new users can sign up |
 | `ENCRYPTION_KEY` | AES-256 key (32 bytes, base64) used to encrypt user-saved PostgreSQL connection strings at rest |
+| `INVITATION_TTL_DAYS` | *(optional)* default lifetime in days for newly-generated invitation tokens. Defaults to `7`. |
 
 **Generating secrets**
 

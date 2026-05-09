@@ -33,11 +33,11 @@ export function SignUpForm({ token }: SignUpFormProps) {
           setError(null)
           setPending(true)
 
-          // TODO(issue #12): pass `token` here so the server can consume it atomically.
           const { error } = await signUp.email({
             email,
             password,
             name: name || email.split("@")[0],
+            ...(token ? { token } : {}),
           })
 
           setPending(false)
@@ -89,7 +89,7 @@ export function SignUpForm({ token }: SignUpFormProps) {
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/sign-in" className="text-foreground hover:underline">
+        <Link href="/signin" className="text-foreground hover:underline">
           Sign in
         </Link>
       </p>
