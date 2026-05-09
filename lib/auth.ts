@@ -31,7 +31,8 @@ export const auth = betterAuth({
     before: createAuthMiddleware(async (ctx) => {
       if (ctx.path === "/sign-up/email") {
         const token = ctx.body?.token as string | undefined
-        const result = await checkRegistrationAllowed(token)
+        const email = ctx.body?.email as string | undefined
+        const result = await checkRegistrationAllowed(token, email)
         if (!result.allowed) {
           throw new APIError("FORBIDDEN", {
             message: `Registration not allowed (${result.reason})`,

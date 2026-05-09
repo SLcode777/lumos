@@ -17,7 +17,11 @@ export default async function SignUpPage({ searchParams }: SignUpPageProps) {
   return <SignUpForm token={token} />
 }
 
-function RegistrationBlocked({ reason }: { reason: "closed" | "invite-only-no-token" | "invite-only-invalid-token" }) {
+function RegistrationBlocked({
+  reason,
+}: {
+  reason: "closed" | "invite-only-no-token" | "invite-only-invalid-token" | "invite-only-email-mismatch"
+}) {
   const messages = {
     closed: {
       title: "Registration is closed",
@@ -31,6 +35,11 @@ function RegistrationBlocked({ reason }: { reason: "closed" | "invite-only-no-to
       title: "Invitation link is invalid",
       description:
         "This invitation link is invalid, expired, or has already been used. Ask your administrator for a fresh one.",
+    },
+    "invite-only-email-mismatch": {
+      title: "Email does not match the invitation",
+      description:
+        "This invitation was issued for a different email address. Sign up with the email you were invited under.",
     },
   } as const
 

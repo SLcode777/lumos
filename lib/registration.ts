@@ -21,7 +21,10 @@ export function getRegistrationMode(): RegistrationMode {
 
 export type RegistrationCheckResult =
   | { allowed: true; reason: "first-user" | "open" | "valid-token" }
-  | { allowed: false; reason: "closed" | "invite-only-no-token" | "invite-only-invalid-token" }
+  | {
+      allowed: false
+      reason: "closed" | "invite-only-no-token" | "invite-only-invalid-token" | "invite-only-email-mismatch"
+    }
 
 /**
  * Decides whether a sign-up should be allowed right now, given the current
@@ -34,7 +37,7 @@ export type RegistrationCheckResult =
  *     - "closed"      → never allowed
  *     - "invite-only" → allowed only with a valid invitation token (validation lives in #10/#12)
  */
-export async function checkRegistrationAllowed(token?: string): Promise<RegistrationCheckResult> {
+export async function checkRegistrationAllowed(token?: string, signupEmail?: string): Promise<RegistrationCheckResult> {
   // Bootstrap: the first user signing up on a fresh instance always passes.
   const userCount = await prisma.user.count()
   if (userCount === 0) {
@@ -59,6 +62,12 @@ export async function checkRegistrationAllowed(token?: string): Promise<Registra
   const invitation = await verifyInvitationToken(token)
   if (!invitation) {
     return { allowed: false, reason: "invite-only-invalid-token" }
+  }
+  // Only enforce email lock-in when an actual sign-up email is provided
+  // (i.e. at form submission via the Better Auth middleware). Page renders
+  // pass `signupEmail === undefined` and only validate the token.
+  if (signupEmail !== undefined && invitation.email && invitation.email !== signupEmail.trim().toLowerCase()) {
+    return { allowed: false, reason: "invite-only-email-mismatch" }
   }
 
   // TODO(issue #12): consume the token atomically inside the user-creation transaction
