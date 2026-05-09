@@ -1,6 +1,76 @@
 import { decrypt } from "@/lib/crypto"
 import { prisma } from "@/lib/prisma"
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Connection string parsing & building (pure helpers, no DB).
+// Used by the new-connection form (#14). Will also feed the test-connection
+// endpoint (#15) once it lands.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ParsedConnectionString =
+  | { ok: true; normalizedUrl: string; host: string }
+  | { ok: false; error: string }
+
+/**
+ * Validates that a string looks like a usable PostgreSQL connection URL.
+ * Accepts the `postgresql://` and `postgres://` schemes (both are standard).
+ * Does NOT attempt to connect — that's #15's job.
+ */
+export function parseConnectionString(input: string): ParsedConnectionString {
+  const trimmed = input.trim()
+  if (!trimmed) {
+    return { ok: false, error: "Connection string is required" }
+  }
+
+  let url: URL
+  try {
+    url = new URL(trimmed)
+  } catch {
+    return {
+      ok: false,
+      error: "Not a valid URL — expected postgresql://user:password@host:port/database",
+    }
+  }
+
+  if (url.protocol !== "postgresql:" && url.protocol !== "postgres:") {
+    return {
+      ok: false,
+      error: `Unsupported protocol "${url.protocol.replace(":", "")}" — expected postgresql:// or postgres://`,
+    }
+  }
+
+  if (!url.hostname) {
+    return { ok: false, error: "Missing host in connection string" }
+  }
+
+  return { ok: true, normalizedUrl: trimmed, host: url.hostname }
+}
+
+/**
+ * Builds a `postgresql://` URL from separate fields. WHATWG `URL` setters
+ * percent-encode `username` and `password` automatically, so the caller can
+ * pass raw values (including `@`, `:`, `/`, etc. in the password).
+ */
+export function buildConnectionStringFromFields(fields: {
+  host: string
+  port: number
+  database: string
+  user: string
+  password?: string
+}): string {
+  // Start from a syntactically-valid placeholder, then override every part.
+  // We don't use a template literal directly because user-controlled host/db
+  // strings would skip URL's encoding pass.
+  const url = new URL("postgresql://placeholder")
+  url.hostname = fields.host
+  url.port = String(fields.port)
+  url.pathname = `/${fields.database}`
+  url.username = fields.user
+  url.password = fields.password ?? ""
+  return url.toString()
+}
+
+
 /**
  * What the dashboard renders for each connection card. Carefully scoped:
  * NO ciphertext, NO iv, NO authTag, NO decrypted connection string. Only
@@ -26,7 +96,7 @@ export type ConnectionsForUser = {
  * Lists all connections accessible to a user, split into owned vs. shared.
  *
  * Single Prisma query with an `OR` between owned and shared, eager-loading
- * the owner's name+email to render "shared by …" badges without a second
+ * the owner's nameemail to render "shared by …" badges without a second
  * round-trip.
  *
  * Decrypts each connection string ONLY to extract the host for display;
