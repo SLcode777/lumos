@@ -3,6 +3,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma"
 import { prisma } from "./prisma"
 import { checkRegistrationAllowed } from "./registration"
 import { createAuthMiddleware } from "better-auth/api"
+import { isEmailDisabled } from "./users"
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -34,6 +35,15 @@ export const auth = betterAuth({
         if (!result.allowed) {
           throw new APIError("FORBIDDEN", {
             message: `Registration not allowed (${result.reason})`,
+          })
+        }
+      }
+
+      if (ctx.path === "/sign-in/email") {
+        const email = ctx.body?.email as string | undefined
+        if (email && (await isEmailDisabled(email))) {
+          throw new APIError("FORBIDDEN", {
+            message: "Invalid credentials", // security: blurred error so the user can't enum users
           })
         }
       }

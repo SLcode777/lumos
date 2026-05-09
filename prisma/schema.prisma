@@ -23,6 +23,7 @@ model User {
   invitationsSent Invitation[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
+  disabledAt      DateTime?           //non-null = account disabled
   emailVerified   Boolean            @default(false)
   sessions        Session[]
   accounts        Account[]
