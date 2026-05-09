@@ -10,12 +10,13 @@ import { Input } from "@/components/ui/input"
 
 type SignUpFormProps = {
   token?: string
+  lockedEmail?: string
 }
 
-export function SignUpForm({ token }: SignUpFormProps) {
+export function SignUpForm({ token, lockedEmail }: SignUpFormProps) {
   const router = useRouter()
   const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(lockedEmail ?? "")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -64,7 +65,13 @@ export function SignUpForm({ token }: SignUpFormProps) {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+          readOnly={Boolean(lockedEmail)}
+          aria-readonly={Boolean(lockedEmail)}
+          className={
+            lockedEmail
+              ? "cursor-not-allowed rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground outline-none"
+              : "rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30"
+          }
         />
         <Input
           type="password"

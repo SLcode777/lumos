@@ -1,9 +1,10 @@
 import { APIError, betterAuth } from "better-auth"
 import { prismaAdapter } from "better-auth/adapters/prisma"
 import { prisma } from "./prisma"
-import { checkRegistrationAllowed } from "./registration"
+import { checkRegistrationAllowed, getRegistrationMode } from "./registration"
 import { createAuthMiddleware } from "better-auth/api"
 import { isEmailDisabled } from "./users"
+import { consumeInvitationToken } from "./invitations"
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
@@ -53,15 +54,47 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        before: async (user) => {
+        before: async (user, ctx) => {
+          // Consume the invitation token atomically with user creation.
+          //
+          // Order of checks Better Auth runs before this hook:
+          //   1. hooks.before middleware (checkRegistrationAllowed) — token validated, email matched.
+          //   2. email format / password length / unique-email checks.
+          //
+          // So by the time we get here, all preconditions are satisfied. We
+          // consume the token now: if a concurrent sign-up just consumed the
+          // same token between step 1 and now, consumeInvitationToken returns
+          // null and we abort — no user gets created.
+          //
+          // First-user bootstrap is exempt: the very first sign-up never
+          // carries a token. We also skip when REGISTRATION_MODE=open, where
+          // tokens are not used at all.
+          const userCount = await prisma.user.count()
+          const mode = getRegistrationMode()
+          const isFirstUser = userCount === 0
+          const requiresToken = !isFirstUser && mode === "invite-only"
+
+          if (requiresToken) {
+            const token = ctx?.body?.token as string | undefined
+            if (!token) {
+              // Defensive: hooks.before should have already rejected. Belt and suspenders.
+              throw new APIError("FORBIDDEN", { message: "Invitation token required" })
+            }
+            const consumed = await consumeInvitationToken(token)
+            if (!consumed) {
+              throw new APIError("FORBIDDEN", {
+                message: "Invitation link is invalid, expired, or has already been used",
+              })
+            }
+          }
+
           // Count existing users. If this is the very first one, promote to admin.
           // First-signup race accepted for MVP: self-hosted instances are
           // bootstrapped by a single deployer, so concurrent first-signups
           // don't happen in practice. Tighten with pg_advisory_xact_lock if
           // the deployment model ever changes.
-          const userCount = await prisma.user.count()
 
-          if (userCount === 0) {
+          if (isFirstUser) {
             return {
               data: {
                 ...user,

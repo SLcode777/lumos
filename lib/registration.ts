@@ -20,7 +20,8 @@ export function getRegistrationMode(): RegistrationMode {
 }
 
 export type RegistrationCheckResult =
-  | { allowed: true; reason: "first-user" | "open" | "valid-token" }
+  | { allowed: true; reason: "first-user" | "open" }
+  | { allowed: true; reason: "valid-token"; invitationEmail: string | null }
   | {
       allowed: false
       reason: "closed" | "invite-only-no-token" | "invite-only-invalid-token" | "invite-only-email-mismatch"
@@ -70,8 +71,5 @@ export async function checkRegistrationAllowed(token?: string, signupEmail?: str
     return { allowed: false, reason: "invite-only-email-mismatch" }
   }
 
-  // TODO(issue #12): consume the token atomically inside the user-creation transaction
-  // (databaseHooks.user.create.before in lib/auth.ts).
-
-  return { allowed: true, reason: "valid-token" }
+  return { allowed: true, reason: "valid-token", invitationEmail: invitation.email }
 }

@@ -14,7 +14,8 @@ export default async function SignUpPage({ searchParams }: SignUpPageProps) {
     return <RegistrationBlocked reason={result.reason} />
   }
 
-  return <SignUpForm token={token} />
+  const lockedEmail = result.reason === "valid-token" ? result.invitationEmail : null
+  return <SignUpForm token={token} lockedEmail={lockedEmail ?? undefined} />
 }
 
 function RegistrationBlocked({

@@ -16,9 +16,9 @@
     "db:up": "infisical run --env=dev -- docker compose up -d postgres-app",
     "db:down": "infisical run --env=dev -- docker compose down",
     "db:logs": "docker compose logs -f postgres-app",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test": "infisical run --env=dev -- vitest run",
+    "test:watch": "infisical run --env=dev -- vitest",
+    "test:ui": "infisical run --env=dev -- vitest --ui"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
