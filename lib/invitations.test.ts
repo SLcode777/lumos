@@ -28,13 +28,13 @@ afterEach(async () => {
 describe("createInvitation", () => {
   it("returns a plaintext token and a row without exposing the hash", async () => {
     const { plaintextToken, invitation } = await createInvitation({ invitedById: adminId })
-    expect(plaintextToken).toMatch(/^[A-Za-z0-9_-]+$/) // base64url
+    expect(plaintextToken).toMatch(/^[A-Za-z0-9_-]$/) // base64url
     expect(plaintextToken.length).toBeGreaterThanOrEqual(43) // 32 bytes → 43 chars
     expect(invitation).not.toHaveProperty("tokenHash")
     expect(invitation.expiresAt.getTime()).toBeGreaterThan(Date.now())
   })
 
-  it("normalizes the email to lowercase + trim", async () => {
+  it("normalizes the email to lowercase  trim", async () => {
     const { invitation } = await createInvitation({
       invitedById: adminId,
       email: "  Foo@Bar.COM  ",
@@ -45,6 +45,45 @@ describe("createInvitation", () => {
   it("treats empty email as null", async () => {
     const { invitation } = await createInvitation({ invitedById: adminId, email: "   " })
     expect(invitation.email).toBeNull()
+  })
+
+  it("refuses when the email matches an existing user", async () => {
+    const user = await prisma.user.create({
+      data: { email: "exists@lumos.local" },
+    })
+    try {
+      await expect(createInvitation({ invitedById: adminId, email: "exists@lumos.local" })).rejects.toThrow(
+        /already registered/
+      )
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } })
+    }
+  })
+
+  it("matches case-insensitively after normalization", async () => {
+    const user = await prisma.user.create({
+      data: { email: "casing@lumos.local" },
+    })
+    try {
+      await expect(createInvitation({ invitedById: adminId, email: "  CASING@lumos.local  " })).rejects.toThrow(
+        /already registered/
+      )
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } })
+    }
+  })
+
+  it("refuses for disabled users too", async () => {
+    const user = await prisma.user.create({
+      data: { email: "disabled@lumos.local", disabledAt: new Date() },
+    })
+    try {
+      await expect(createInvitation({ invitedById: adminId, email: "disabled@lumos.local" })).rejects.toThrow(
+        /already registered/
+      )
+    } finally {
+      await prisma.user.delete({ where: { id: user.id } })
+    }
   })
 })
 

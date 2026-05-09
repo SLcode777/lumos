@@ -89,26 +89,22 @@ export function UsersTable({ users, currentUserId, page, totalPages, totalCount 
                     </form>
 
                     {/* Disable / Enable */}
-                    {isSelf && !isDisabled ? null : (
-                      <form
-                        action={(fd) => {
-                          fd.set("id", u.id)
-                          fd.set("disabled", isDisabled ? "false" : "true")
-                          runAction(fd, setUserDisabledAction)
-                        }}
-                      >
-                        <Button type="submit" variant="ghost" size="sm" disabled={pending}>
-                          {isDisabled ? "Enable" : "Disable"}
-                        </Button>
-                      </form>
-                    )}
+                    <form
+                      action={(fd) => {
+                        fd.set("id", u.id)
+                        fd.set("disabled", isDisabled ? "false" : "true")
+                        runAction(fd, setUserDisabledAction)
+                      }}
+                    >
+                      <Button type="submit" variant="ghost" size="sm" disabled={pending || isSelf}>
+                        {isDisabled ? "Enable" : "Disable"}
+                      </Button>
+                    </form>
 
                     {/* Delete */}
-                    {isSelf ? null : (
-                      <Button variant="ghost" size="sm" disabled={pending} onClick={() => setDeleting(u)}>
-                        Delete
-                      </Button>
-                    )}
+                    <Button variant="destructive" size="sm" disabled={pending || isSelf} onClick={() => setDeleting(u)}>
+                      Delete
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>

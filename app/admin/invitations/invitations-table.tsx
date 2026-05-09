@@ -44,7 +44,7 @@ export function InvitationsTable({ invitations }: { invitations: InvitationListI
                   }}
                 >
                   <input type="hidden" name="id" value={inv.id} />
-                  <Button type="submit" variant="ghost" size="sm">
+                  <Button type="submit" variant="destructive" size="sm">
                     Revoke
                   </Button>
                 </form>

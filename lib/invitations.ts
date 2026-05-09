@@ -44,6 +44,19 @@ export async function createInvitation(params: {
   email?: string
   ttlDays?: number
 }): Promise<CreatedInvitation> {
+    const normalizedEmail = params.email?.trim().toLocaleLowerCase() || null
+
+    // Check if email is already registered
+    if (normalizedEmail) {
+      const existing = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true },
+      })
+      if (existing) {
+        throw new Error("A user with this email is already registered.")
+      }
+    }
+
   const plaintextToken = randomBytes(TOKEN_BYTES).toString("base64url")
   const tokenHash = hashToken(plaintextToken)
 
@@ -53,7 +66,7 @@ export async function createInvitation(params: {
   const invitation = await prisma.invitation.create({
     data: {
       tokenHash,
-      email: params.email?.trim().toLowerCase() || null,
+      email: normalizedEmail,
       invitedById: params.invitedById,
       expiresAt,
     },

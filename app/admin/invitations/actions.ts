@@ -38,7 +38,7 @@ export async function generateInvitationAction(formData: FormData): Promise<Gene
     }
   } catch (err) {
     console.error("[generateInvitationAction]", err)
-    return { ok: false, error: "Failed to generate invitation" }
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to generate invitation" }
   }
 }
 
