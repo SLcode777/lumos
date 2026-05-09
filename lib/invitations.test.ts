@@ -28,13 +28,13 @@ afterEach(async () => {
 describe("createInvitation", () => {
   it("returns a plaintext token and a row without exposing the hash", async () => {
     const { plaintextToken, invitation } = await createInvitation({ invitedById: adminId })
-    expect(plaintextToken).toMatch(/^[A-Za-z0-9_-]$/) // base64url
+    expect(plaintextToken).toMatch(/^[A-Za-z0-9_-]+$/) // base64url
     expect(plaintextToken.length).toBeGreaterThanOrEqual(43) // 32 bytes → 43 chars
     expect(invitation).not.toHaveProperty("tokenHash")
     expect(invitation.expiresAt.getTime()).toBeGreaterThan(Date.now())
   })
 
-  it("normalizes the email to lowercase  trim", async () => {
+  it("normalizes the email to lowercase + trim", async () => {
     const { invitation } = await createInvitation({
       invitedById: adminId,
       email: "  Foo@Bar.COM  ",
