@@ -220,7 +220,17 @@ model TableLayout {
 | Chiffrement | La connection string est chiffrée côté serveur avec AES-256-GCM avant stockage. Clé de chiffrement dans une variable d'environnement (`ENCRYPTION_KEY`). |
 | Isolation par user | Toutes les requêtes API filtrent par `userId` côté serveur. Un user ne peut accéder qu'à ses propres connexions ou à celles partagées avec lui — vérifié à chaque requête, jamais en se fiant au client. |
 
-### Phase 2 — Partage de connexions
+### Phase 2 — Introspection du schéma
+
+**Objectif** : une fois connecté à une BDD, afficher la structure complète (tables, colonnes, types, relations).
+
+| Fonctionnalité | Détail |
+|---|---|
+| Découverte automatique | Requêtes sur `information_schema.tables`, `information_schema.columns`, `information_schema.key_column_usage`, `information_schema.table_constraints` pour extraire tables, colonnes, types, clés primaires, clés étrangères. |
+| Sidebar | Liste des tables avec le nombre de lignes (via `pg_stat_user_tables` ou `COUNT(*)`). Recherche rapide pour filtrer les tables. |
+| Cache du schéma | Le schéma est mis en cache côté client (React state/context) pour éviter de le re-fetcher à chaque navigation. Bouton "Refresh" pour forcer la mise à jour. |
+
+### Phase 3 — Partage de connexions
 
 **Objectif** : un owner peut partager une de ses connexions à d'autres users de l'instance, qui pourront alors la browse en lecture seule sans jamais voir les credentials.
 
@@ -232,16 +242,6 @@ model TableLayout {
 | Vue côté viewer | Dans le dashboard, badge "Partagé par [nom de l'owner]" sur les connexions reçues. Pas d'accès aux paramètres de connexion (formulaire credentials caché). |
 | Sécurité serveur | À chaque requête sur une connexion, le serveur vérifie que l'user est soit l'owner, soit présent dans `ConnectionAccess` pour cette connexion. Sinon → 403. La vérification du rôle (`viewer` vs `owner`) gate les actions d'édition et de partage. |
 | Évolution future | Le rôle `editor` (peut browse + éditer les données mais pas re-partager) est prévu pour une phase ultérieure, en lien avec l'édition inline (Phase 7). |
-
-### Phase 3 — Introspection du schéma
-
-**Objectif** : une fois connecté à une BDD, afficher la structure complète (tables, colonnes, types, relations).
-
-| Fonctionnalité | Détail |
-|---|---|
-| Découverte automatique | Requêtes sur `information_schema.tables`, `information_schema.columns`, `information_schema.key_column_usage`, `information_schema.table_constraints` pour extraire tables, colonnes, types, clés primaires, clés étrangères. |
-| Sidebar | Liste des tables avec le nombre de lignes (via `pg_stat_user_tables` ou `COUNT(*)`). Recherche rapide pour filtrer les tables. |
-| Cache du schéma | Le schéma est mis en cache côté client (React state/context) pour éviter de le re-fetcher à chaque navigation. Bouton "Refresh" pour forcer la mise à jour. |
 
 ### Phase 4 — Browsing des données
 
@@ -433,8 +433,8 @@ model TableLayout {
 | Phase | Contenu | Priorité |
 |---|---|---|
 | **Phase 1** | Auth (Better Auth, OAuth GitHub/GitLab inclus) + invitations admin + dashboard connexions + chiffrement | 🔴 Critique |
-| **Phase 2** | Partage de connexions (rôle viewer) + isolation par user | 🔴 Critique |
-| **Phase 3** | Introspection du schéma + sidebar | 🔴 Critique |
+| **Phase 2** | Introspection du schéma + sidebar | 🔴 Critique |
+| **Phase 3** | Partage de connexions (rôle viewer) + isolation par user | 🔴 Critique |
 | **Phase 4** | Data grid + pagination + tri + vue détail | 🔴 Critique |
 | **Phase 5** | Filtrage type-aware + recherche | 🟠 Haute |
 | **Phase 6** | Navigation relationnelle (FK) + breadcrumb | 🟠 Haute |
