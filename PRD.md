@@ -49,7 +49,7 @@
 
 | Technologie | Rôle |
 |---|---|
-| **Better Auth** | Authentification : email/password local par défaut + OAuth GitHub/GitLab optionnel (activable via variables d'env) |
+| **Better Auth** | Authentification : email/password local |
 
 ### Déploiement
 
@@ -127,7 +127,7 @@ model User {
   id              String              @id @default(cuid())
   email           String              @unique
   name            String?
-  passwordHash    String?             // null si OAuth uniquement
+  passwordHash    String              // hash du mot de passe (géré par Better Auth)
   image           String?
   role            String              @default("user") // "admin" | "user"
   connections     Connection[]        // Connexions dont l'user est owner
@@ -209,7 +209,7 @@ model TableLayout {
 
 | Fonctionnalité | Détail |
 |---|---|
-| Inscription / login | Géré via **Better Auth**. Email + mot de passe (hash via bcrypt/argon2 selon Better Auth) **ET** OAuth GitHub/GitLab. L'OAuth est activable via variables d'env (`GITHUB_CLIENT_ID`, `GITLAB_CLIENT_ID`, etc.) — si non configuré, seul email/password est disponible. |
+| Inscription / login | Géré via **Better Auth**. Email + mot de passe (hash via bcrypt/argon2 selon Better Auth). |
 | First-user-is-admin | Le premier compte créé sur une instance fraîche reçoit automatiquement le rôle `admin`. Tous les comptes suivants sont `user` par défaut. |
 | Mode d'inscription | Variable d'env `REGISTRATION_MODE` avec 3 valeurs : `open` (n'importe qui peut créer un compte), `invite-only` (inscription possible uniquement avec un token d'invitation valide — **valeur recommandée par défaut**), `closed` (aucune nouvelle inscription, l'admin doit changer la config). |
 | Invitations (admin) | Dans l'UI admin, un bouton "Générer un lien d'invitation" produit une URL contenant un token (cryptographiquement aléatoire, 32 bytes, single-use, expirable 7 jours par défaut). Le token est stocké **hashé** en BDD. L'admin transmet le lien hors-app (Signal, password manager, mail, etc.). À la consommation, le token est marqué consumé et ne peut plus servir. |
@@ -432,7 +432,7 @@ model TableLayout {
 
 | Phase | Contenu | Priorité |
 |---|---|---|
-| **Phase 1** | Auth (Better Auth, OAuth GitHub/GitLab inclus) + invitations admin + dashboard connexions + chiffrement | 🔴 Critique |
+| **Phase 1** | Auth (Better Auth, email/password) + invitations admin + dashboard connexions + chiffrement | 🔴 Critique |
 | **Phase 2** | Introspection du schéma + sidebar | 🔴 Critique |
 | **Phase 3** | Data grid + pagination + tri + vue détail | 🔴 Critique |
 | **Phase 4** | Partage de connexions (rôle viewer) + isolation par user | 🔴 Critique |
@@ -474,8 +474,6 @@ docker compose up -d
 | `BETTER_AUTH_URL` | ✅ | URL publique de l'instance (ex: `https://lumos.mondomaine.fr`) |
 | `REGISTRATION_MODE` | optionnel | `open` / `invite-only` / `closed` (défaut : `invite-only`) |
 | `INVITATION_TTL_DAYS` | optionnel | Durée de vie d'un token d'invitation (défaut : 7) |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | optionnel | Active OAuth GitHub si fournis |
-| `GITLAB_CLIENT_ID`, `GITLAB_CLIENT_SECRET` | optionnel | Active OAuth GitLab si fournis |
 
 Toutes les variables sont documentées dans `.env.example` à la racine du repo.
 

@@ -19,5 +19,46 @@ services:
       timeout: 5s
       retries: 5
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lumos-app
+    restart: unless-stopped
+    depends_on:
+      postgres-app:
+        condition: service_healthy
+    environment:
+      # Inside the compose network, reach Postgres by service name + internal port.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lumos}:${POSTGRES_PASSWORD:-lumos}@postgres-app:5432/${POSTGRES_DB:-lumos}?schema=public
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+      REGISTRATION_MODE: ${REGISTRATION_MODE:-invite-only}
+      INVITATION_TTL_DAYS: ${INVITATION_TTL_DAYS:-7}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Optional reverse-proxy for HTTPS in front of the app.
+  # Uncomment + adjust the email/domain to enable. Requires a public domain
+  # pointing to this host (Caddy provisions Let's Encrypt certs automatically).
+  # ────────────────────────────────────────────────────────────────────────────
+  # caddy:
+  #   image: caddy:2-alpine
+  #   container_name: lumos-caddy
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - app
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy-data:/data
+  #     - caddy-config:/config
+
 volumes:
   postgres-app-data:
+  # caddy-data:
+  # caddy-config:
