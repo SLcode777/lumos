@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import type { FkIndex } from "@/lib/fk-index"
 import type { ColumnInfo } from "@/lib/introspect"
 import { cn } from "@/lib/utils"
+import { Cell } from "./cell"
 
 const VISIBLE_FIELDS = 6
 
@@ -32,7 +33,7 @@ export function RecordCards({ columns, rows, primary, fkIndex }: Props) {
       {rows.map((row, i) => (
         <Card key={i}>
           <CardHeader className="flex flex-row items-center justify-between">
-            <h3 className="text-base font-semibold">{renderRaw(row[primary.name])}</h3>
+            <h3 className="truncate text-base font-semibold text-foreground">{renderRaw(row[primary.name])}</h3>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -62,7 +63,7 @@ function FieldChip({ column, value, fk }: { column: ColumnInfo; value: unknown; 
       <div className="mt-1 flex items-center gap-1.5">
         <TypeIcon column={column} isFk={isFk} />
         <span className={cn("truncate text-sm", isFk && "text-violet-700 dark:text-violet-300")}>
-          {renderRaw(value)}
+          <Cell value={value} column={column} />
         </span>
       </div>
     </div>

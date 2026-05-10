@@ -1,0 +1,109 @@
+/**
+ * Pure formatting helpers for type-aware cell rendering.
+ * No React, no DOM — testable in isolation.
+ *
+ * Consumed by app/.../[table]/cell.tsx.
+ */
+
+const URL_REGEX = /^https?:\/\//i
+
+/**
+ * Postgres data_type strings can carry a precision/length suffix like
+ * `numeric(10,2)` or `character varying(255)`. We strip those before matching
+ * to keep the dispatch table small. The result is lowercased and trimmed.
+ */
+export function normalizeDataType(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/\s*\([^)]*\)\s*/g, "")
+    .trim()
+}
+
+/**
+ * Type buckets used by the Cell component. Coverage is curated for the
+ * common Postgres types; anything not in these sets falls back to the
+ * generic stringification path.
+ */
+export const NUMERIC_TYPES = new Set([
+  "integer",
+  "bigint",
+  "smallint",
+  "numeric",
+  "decimal",
+  "real",
+  "double precision",
+])
+
+export const DATE_TYPES = new Set([
+  "date",
+  "timestamp",
+  "timestamp without time zone",
+  "timestamp with time zone",
+  "time",
+  "time without time zone",
+  "time with time zone",
+])
+
+export const TEXT_TYPES = new Set(["text", "character varying", "character", "citext"])
+
+/** True for any text-like string that "looks like" an HTTP(S) URL. */
+export function looksLikeUrl(value: string): boolean {
+  return URL_REGEX.test(value)
+}
+
+/**
+ * Truncate a string to `max` characters, adding an ellipsis if it was cut.
+ * Returns the original string when shorter or equal.
+ */
+export function truncate(s: string, max: number): string {
+  if (s.length <= max) return s
+  return `${s.slice(0, max)}…`
+}
+
+/**
+ * Render a JSON value as a compact preview that fits in a chip.
+ * Objects → `{ key: …, … }` style snippet
+ * Arrays  → `[a, b, …]` style snippet
+ * Cycles or BigInt → `"{…}"` placeholder fallback.
+ */
+export function previewJson(value: unknown, max = 60): string {
+  try {
+    const json = JSON.stringify(value)
+    if (!json) return "—"
+    return truncate(json, max)
+  } catch {
+    return Array.isArray(value) ? "[…]" : "{…}"
+  }
+}
+
+/**
+ * Detect whether a column is an array based on its `udt_name`.
+ * Postgres prefixes array UDT names with an underscore (e.g. `_int4`).
+ */
+export function isArrayColumn(udtName: string): boolean {
+  return udtName.startsWith("_")
+}
+
+/** Module-level so we don't reallocate per render. */
+const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+})
+
+const dateOnlyFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" })
+
+/**
+ * Format a date-like value using the user's locale.
+ * Returns `null` if the input doesn't parse to a valid date.
+ */
+export function formatDate(value: unknown, dataType: string): { iso: string; display: string } | null {
+  // pg returns dates as Date objects (with the date-fns adapter) or as strings.
+  const date = value instanceof Date ? value : new Date(value as string)
+  if (Number.isNaN(date.getTime())) return null
+
+  const isDateOnly = dataType === "date"
+  return {
+    iso: date.toISOString(),
+    display: isDateOnly ? dateOnlyFormatter.format(date) : dateTimeFormatter.format(date),
+  }
+}
