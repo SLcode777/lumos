@@ -5,10 +5,28 @@ const KEY_LENGTH = 32 // 256 bits
 const IV_LENGTH = 12 // 96 bits — NIST-recommended for GCM
 const AUTH_TAG_LENGTH = 16 // 128 bits
 
-// Parse and validate ENCRYPTION_KEY at module load time. Fails fast if missing
-// or malformed, so a misconfigured deployment can't silently fall back to a
-// weak default.
-const KEY = parseEncryptionKey(process.env.ENCRYPTION_KEY)
+// Parse and validate ENCRYPTION_KEY lazily — at first encrypt/decrypt call,
+// not at module load. Loading at module-eval time breaks `next build` (which
+// imports server modules during page-data collection without runtime env).
+//
+// Fail-fast at server boot is preserved via instrumentation.ts which calls
+// assertCryptoConfigured() at server start.
+let cachedKey: Buffer | null = null
+
+function getKey(): Buffer {
+  if (cachedKey !== null) return cachedKey
+  cachedKey = parseEncryptionKey(process.env.ENCRYPTION_KEY)
+  return cachedKey
+}
+
+/**
+ * Triggers ENCRYPTION_KEY validation. Designed to be called once from
+ * instrumentation.ts at server boot, so misconfigured deploys crash before
+ * accepting any request rather than 500-ing on the first encrypt/decrypt.
+ */
+export function assertCryptoConfigured(): void {
+  getKey()
+}
 
 function parseEncryptionKey(raw: string | undefined): Buffer {
   if (!raw) {
@@ -40,7 +58,7 @@ export type EncryptedPayload = {
  */
 export function encrypt(plaintext: string): EncryptedPayload {
   const iv = randomBytes(IV_LENGTH)
-  const cipher = createCipheriv(ALGORITHM, KEY, iv)
+  const cipher = createCipheriv(ALGORITHM, getKey(), iv)
 
   const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()])
 
@@ -71,7 +89,7 @@ export function decrypt(payload: EncryptedPayload): string {
     throw new Error(`Invalid authTag length: expected ${AUTH_TAG_LENGTH}, got ${authTag.length}`)
   }
 
-  const decipher = createDecipheriv(ALGORITHM, KEY, iv)
+  const decipher = createDecipheriv(ALGORITHM, getKey(), iv)
   decipher.setAuthTag(authTag)
 
   const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()])

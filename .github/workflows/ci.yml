@@ -64,6 +64,11 @@ jobs:
       - name: Apply database migrations
         run: pnpm exec prisma migrate deploy
 
+      # Build first: it generates `.next/types/` (PageProps, LayoutProps, etc.)
+      # that the typecheck step needs, AND validates the build itself.
+      - name: Build
+        run: pnpm exec next build
+
       - name: Type check
         run: pnpm exec tsc --noEmit
 
@@ -72,6 +77,3 @@ jobs:
 
       - name: Test
         run: pnpm exec vitest run
-
-      - name: Build
-        run: pnpm exec next build
