@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Cancel in-flight runs on the same branch when a new push comes in.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Type-check, lint, test, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: lumos
+          POSTGRES_PASSWORD: lumos
+          POSTGRES_DB: lumos_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Static, throwaway values — CI never touches real secrets or production
+      # data. They exist purely so the app + tests can boot.
+      DATABASE_URL: postgresql://lumos:lumos@localhost:5433/lumos_test?schema=public
+      ENCRYPTION_KEY: bGdoTGNVT1F0VjZJVTV6eFJSTHl5UUNmUWZreXBRQXM=
+      BETTER_AUTH_SECRET: ci-secret-not-for-prod-use-only-32bytes
+      BETTER_AUTH_URL: http://localhost:3000
+      REGISTRATION_MODE: invite-only
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate
+
+      - name: Apply database migrations
+        run: pnpm exec prisma migrate deploy
+
+      - name: Type check
+        run: pnpm exec tsc --noEmit
+
+      - name: Lint
+        run: pnpm exec eslint .
+
+      - name: Test
+        run: pnpm exec vitest run
+
+      - name: Build
+        run: pnpm exec next build
