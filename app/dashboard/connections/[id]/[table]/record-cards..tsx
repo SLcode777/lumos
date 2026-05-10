@@ -40,7 +40,7 @@ export function RecordCards({ columns, rows, primary, fkIndex, rowHrefs }: Props
           ariaLabel={`Open detail view for ${stringifyForTitle(row[primary.name])}`}
         >
           {" "}
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="mb-3 flex flex-row items-center justify-between">
             <h3 className="truncate text-base font-semibold text-foreground">{renderRaw(row[primary.name])}</h3>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
