@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { AccessError } from "@/lib/access"
 import { decrypt } from "@/lib/crypto"
 import { getSession } from "@/lib/get-session"
-import { introspectSchema, type DatabaseSchema } from "@/lib/introspect"
+import type { DatabaseSchema } from "@/lib/introspect"
+import { loadSchema } from "@/lib/load-schema"
 import { loadConnection } from "@/lib/load-connection"
 import { getConnectionPool } from "@/lib/pool-manager"
 
@@ -51,7 +52,7 @@ export default async function ConnectionLayout({
   // user a back link + connection context while the sidebar shows the error.
   let schema: DatabaseSchema | null = null
   try {
-    schema = await introspectSchema(pool)
+    schema = await loadSchema(pool)
   } catch (err) {
     console.error("[connection-detail] introspection failed:", err instanceof Error ? err.message : err)
   }
@@ -65,9 +66,9 @@ export default async function ConnectionLayout({
   }
 
   return (
-    <div className="flex min-h-svh flex-col">
+    <div className="flex h-svh flex-col">
       <AppHeader user={session.user} />
-      <main className="flex flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border px-6 py-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" asChild>
@@ -87,15 +88,11 @@ export default async function ConnectionLayout({
           </div>
         </header>
 
-        <div className="flex flex-1">
-          {schema ? (
-            <Sidebar schema={schema} connectionId={conn.id} />
-          ) : (
-            <SidebarErrorFallback />
-          )}
+        <div className="flex min-h-0 flex-1">
+          {schema ? <Sidebar schema={schema} connectionId={conn.id} /> : <SidebarErrorFallback />}
 
           {/* Main content slot */}
-          <section className="flex-1">{children}</section>
+          <section className="min-h-0 flex-1 overflow-hidden">{children}</section>
         </div>
       </main>
     </div>
