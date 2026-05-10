@@ -5,6 +5,8 @@ import type { FkIndex } from "@/lib/fk-index"
 import type { ColumnInfo } from "@/lib/introspect"
 import { cn } from "@/lib/utils"
 import { Cell } from "./cell"
+import { ClickableCard } from "./clickable-card"
+import { stringifyForTitle } from "@/lib/cell-format"
 
 const VISIBLE_FIELDS = 6
 
@@ -13,9 +15,10 @@ type Props = Readonly<{
   rows: Record<string, unknown>[]
   primary: ColumnInfo
   fkIndex: FkIndex
+  rowHrefs: string[]
 }>
 
-export function RecordCards({ columns, rows, primary, fkIndex }: Props) {
+export function RecordCards({ columns, rows, primary, fkIndex, rowHrefs }: Props) {
   if (rows.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center p-12 text-center">
@@ -31,7 +34,12 @@ export function RecordCards({ columns, rows, primary, fkIndex }: Props) {
   return (
     <div className="flex-1 space-y-3 overflow-auto p-4">
       {rows.map((row, i) => (
-        <Card key={i}>
+        <ClickableCard
+          key={i}
+          href={rowHrefs[i]}
+          ariaLabel={`Open detail view for ${stringifyForTitle(row[primary.name])}`}
+        >
+          {" "}
           <CardHeader className="flex flex-row items-center justify-between">
             <h3 className="truncate text-base font-semibold text-foreground">{renderRaw(row[primary.name])}</h3>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -44,7 +52,7 @@ export function RecordCards({ columns, rows, primary, fkIndex }: Props) {
             </div>
             {hiddenCount > 0 && <p className="mt-3 text-xs text-muted-foreground">+{hiddenCount} more fields</p>}
           </CardContent>
-        </Card>
+        </ClickableCard>
       ))}
     </div>
   )

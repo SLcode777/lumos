@@ -107,3 +107,20 @@ export function formatDate(value: unknown, dataType: string): { iso: string; dis
     display: isDateOnly ? dateOnlyFormatter.format(date) : dateTimeFormatter.format(date),
   }
 }
+
+/**
+ * Cheap stringification for header/title contexts where we want a string,
+ * not a React node. Mirrors the data-grid's `renderRaw` policy: null → em-dash;
+ * objects → JSON.stringify with String fallback; everything else → String.
+ */
+export function stringifyForTitle(value: unknown): string {
+  if (value === null || value === undefined) return "—"
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+  return String(value)
+}

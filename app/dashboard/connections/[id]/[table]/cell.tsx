@@ -13,23 +13,28 @@ import {
   truncate,
 } from "@/lib/cell-format"
 import type { ColumnInfo } from "@/lib/introspect"
+import { cn } from "@/lib/utils"
 
 const MAX_TEXT_PREVIEW = 80
 
 type Props = Readonly<{
   value: unknown
   column: ColumnInfo
+  mode?: "compact" | "full"
 }>
 
 /**
- * Type-aware single-cell renderer. Returns inline content suitable for
- * embedding inside a card chip (its parent applies truncation + color).
+ * Type-aware single-cell renderer. Returns inline content (compact mode) or
+ * block content (full mode, used by the row detail panel).
  *
  * Dispatch is on the column's normalized `data_type`. Falls back to a
  * stringified preview for any unknown type.
  */
-export function Cell({ value, column }: Props) {
+export function Cell({ value, column, mode = "compact" }: Props) {
   if (value === null || value === undefined) {
+    if (mode === "full") {
+      return <span className="text-muted-foreground italic">No value</span>
+    }
     return <span className="text-muted-foreground italic">—</span>
   }
 
@@ -37,6 +42,9 @@ export function Cell({ value, column }: Props) {
   // = "ARRAY" but that's not granular enough — we check udt_name to know
   // both that it's an array and what element type).
   if (isArrayColumn(column.udtName)) {
+    if (mode === "full") {
+      return <pre className="font-mono text-xs break-words whitespace-pre-wrap">{safeJsonStringify(value, 2)}</pre>
+    }
     return <span className="font-mono text-xs">{previewJson(value)}</span>
   }
 
@@ -73,6 +81,9 @@ export function Cell({ value, column }: Props) {
   }
 
   if (t === "json" || t === "jsonb") {
+    if (mode === "full") {
+      return <pre className="wrap-break-words font-mono text-xs whitespace-pre-wrap">{safeJsonStringify(value, 2)}</pre>
+    }
     return <span className="font-mono text-xs">{previewJson(value)}</span>
   }
 
@@ -85,26 +96,40 @@ export function Cell({ value, column }: Props) {
           target="_blank"
           rel="noopener noreferrer"
           title={str}
-          className="inline-flex items-center gap-1 underline-offset-2 hover:underline"
+          className={cn("underline-offset-2 hover:underline", mode === "full" && "break-all")}
         >
-          <span className="truncate">{truncate(str, MAX_TEXT_PREVIEW)}</span>
-          <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
+          {mode === "full" ? str : truncate(str, MAX_TEXT_PREVIEW)}
+          <ExternalLink className="ml-1 inline-block h-3 w-3 align-text-bottom" aria-hidden />
         </a>
       )
+    }
+    if (mode === "full") {
+      return <span className="wrap-break-words whitespace-pre-wrap">{str}</span>
     }
     return <span title={str.length > MAX_TEXT_PREVIEW ? str : undefined}>{truncate(str, MAX_TEXT_PREVIEW)}</span>
   }
 
-  // Fallback: string-stringify, preview, italic.
+  // Fallback: string-stringify, preview, italic. Truncate in compact, full text in full.
   let display: string
   try {
     display = typeof value === "object" ? JSON.stringify(value) : String(value)
   } catch {
     display = String(value)
   }
+  if (mode === "full") {
+    return <span className="wrap-break-words whitespace-pre-wrap text-muted-foreground italic">{display}</span>
+  }
   return (
     <span className="text-muted-foreground italic" title={display.length > MAX_TEXT_PREVIEW ? display : undefined}>
       {truncate(display, MAX_TEXT_PREVIEW)}
     </span>
   )
+}
+
+function safeJsonStringify(value: unknown, indent: number): string {
+  try {
+    return JSON.stringify(value, null, indent)
+  } catch {
+    return String(value)
+  }
 }
