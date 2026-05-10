@@ -1,6 +1,6 @@
 import { Calendar, ChevronRight, Hash, Link2, ToggleLeft, Type } from "lucide-react"
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { CardContent, CardHeader } from "@/components/ui/card"
 import type { FkIndex } from "@/lib/fk-index"
 import type { ColumnInfo } from "@/lib/introspect"
 import { cn } from "@/lib/utils"

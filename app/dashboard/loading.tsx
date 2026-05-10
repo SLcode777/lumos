@@ -1,5 +1,3 @@
-import { AppHeader } from "@/components/app-header"
-
 export default function DashboardLoading() {
   return (
     <div className="flex min-h-svh flex-col">
