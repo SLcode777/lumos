@@ -1,4 +1,5 @@
 import type { Pool } from "pg"
+import { SortState } from "./sort"
 
 export type QueryTableRowsParams = {
   /** PG schema name (NOT the DatabaseSchema model). */
@@ -9,6 +10,8 @@ export type QueryTableRowsParams = {
   page: number
   /** Number of rows per page. */
   pageSize: number
+  /** Optional sort. Caller MUST have whitelisted the column already. */
+  orderBy?: SortState | null
 }
 
 export type QueryTableRowsResult = {
@@ -26,9 +29,15 @@ export type QueryTableRowsResult = {
  * Values (page, pageSize) are passed as parameterized values, never inlined.
  */
 export async function queryTableRows(pool: Pool, params: QueryTableRowsParams): Promise<QueryTableRowsResult> {
-  const { pgSchema, table, page, pageSize } = params
+  const { pgSchema, table, page, pageSize, orderBy } = params
 
-  const sql = `SELECT * FROM ${escapeIdentifier(pgSchema)}.${escapeIdentifier(table)} LIMIT $1 OFFSET $2`
+  // `direction` is one of two literal keywords — safe to interpolate after the
+  // strict check in parseSortParams. `column` is an identifier → escape it.
+  const orderClause = orderBy
+    ? ` ORDER BY ${escapeIdentifier(orderBy.column)} ${orderBy.direction === "desc" ? "DESC" : "ASC"}`
+    : ""
+
+  const sql = `SELECT * FROM ${escapeIdentifier(pgSchema)}.${escapeIdentifier(table)}${orderClause} LIMIT $1 OFFSET $2`  
   const offset = (page - 1) * pageSize
 
   const result = await pool.query<Record<string, unknown>>(sql, [pageSize, offset])

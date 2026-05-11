@@ -41,3 +41,28 @@ describe("escapeIdentifier", () => {
     expect(escapeIdentifier("")).toBe(`""`)
   })
 })
+
+describe("queryTableRows orderBy clause", () => {
+  it("renders correctly inside the SELECT (sanity check via a fake pool)", async () => {
+    // The fake pool just captures the SQL it receives.
+    const captured: { sql?: string } = {}
+    const fakePool = {
+      query: (sql: string) => {
+        captured.sql = sql
+        return Promise.resolve({ rows: [] })
+      },
+    } as unknown as import("pg").Pool
+
+    const { queryTableRows } = await import("@/lib/query-table")
+    await queryTableRows(fakePool, {
+      pgSchema: "public",
+      table: "users",
+      page: 1,
+      pageSize: 25,
+      orderBy: { column: "email", direction: "desc" },
+    })
+
+    expect(captured.sql).toContain(`ORDER BY "email" DESC`)
+    expect(captured.sql).toMatch(/ORDER BY .* LIMIT \$1 OFFSET \$2$/)
+  })
+})

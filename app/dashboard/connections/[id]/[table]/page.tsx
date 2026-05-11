@@ -17,6 +17,8 @@ import { stringifyForTitle } from "@/lib/cell-format"
 import { encodeRowParam, findRowByParam } from "@/lib/row-id"
 import { Cell } from "./cell"
 import { RowDetailPanel } from "./row-detail-panel"
+import { parseSortParams, SortState } from "@/lib/sort"
+import { ColumnInfo } from "@/lib/introspect"
 
 const PAGE_SIZES = [25, 50, 100] as const
 const DEFAULT_PAGE_SIZE = 50
@@ -68,6 +70,7 @@ export default async function TableViewPage({
   const sp = await searchParams
   const pageSize = parsePageSize(sp.pageSize)
   const page = parsePage(sp.page)
+  const sort = parseSortParams(sp.sort, sp.order, tableInfo.columns)
 
   let rows: Record<string, unknown>[] = []
   let queryError: string | null = null
@@ -77,6 +80,7 @@ export default async function TableViewPage({
       table: tableInfo.name,
       page,
       pageSize,
+      orderBy: sort,
     })
     rows = result.rows
   } catch (err) {
@@ -97,6 +101,12 @@ export default async function TableViewPage({
   const persistentParams = new URLSearchParams()
   if (typeof sp.page === "string") persistentParams.set("page", sp.page)
   if (typeof sp.pageSize === "string") persistentParams.set("pageSize", sp.pageSize)
+  if (sort) {
+    persistentParams.set("sort", sort.column)
+    persistentParams.set("order", sort.direction)
+  }
+
+  const sortHrefs = buildSortHrefs(baseHref, sp, sort, tableInfo.columns)
 
   const persistentQuery = persistentParams.toString()
   const closeHref = persistentQuery ? `${baseHref}?${persistentQuery}` : baseHref
@@ -127,7 +137,7 @@ export default async function TableViewPage({
 
   return (
     <div className="flex h-full flex-col">
-      <TableToolbar />
+      <TableToolbar columns={tableInfo.columns} sort={sort} sortHrefs={sortHrefs} />
       {queryError ? (
         <InlineErrorState message={queryError} />
       ) : (
@@ -157,4 +167,57 @@ function InlineErrorState({ message }: { message: string }) {
       <p className="text-sm text-muted-foreground">{message}</p>
     </div>
   )
+}
+
+/**
+ * Build the per-column hrefs used by the SortMenu. Each column href encodes
+ * the next state in the asc → desc → unsorted cycle for that column. The
+ * `clear` href removes sort entirely.
+ *
+ * `page` is reset to 1 on any sort change — the previous "page 3" doesn't
+ * map to anything meaningful under a new order.
+ */
+function buildSortHrefs(
+  baseHref: string,
+  sp: { [key: string]: string | string[] | undefined },
+  current: SortState | null,
+  columns: ColumnInfo[],
+): { perColumn: Record<string, string>; clear: string; flip: string | null } {
+  function buildHref(nextSort: string | null, nextOrder: "asc" | "desc" | null): string {
+    const params = new URLSearchParams()
+    if (typeof sp.pageSize === "string") params.set("pageSize", sp.pageSize)
+    if (nextSort) params.set("sort", nextSort)
+    if (nextOrder) params.set("order", nextOrder)
+    // page is intentionally reset to 1 (= absent param), see JSDoc above.
+    const qs = params.toString()
+    return qs ? `${baseHref}?${qs}` : baseHref
+  }
+
+  const perColumn: Record<string, string> = {}
+  for (const col of columns) {
+    if (!current || current.column !== col.name) {
+      // Inactive column → next click starts the cycle at asc.
+      perColumn[col.name] = buildHref(col.name, "asc")
+    } else if (current.direction === "asc") {
+      // Active + asc → next click flips to desc.
+      perColumn[col.name] = buildHref(col.name, "desc")
+    } else {
+      // Active + desc → next click clears sort.
+      perColumn[col.name] = buildHref(null, null)
+    }
+  }
+
+  // Strict asc↔desc flip for the active column (used by the inline arrow
+  // button in the toolbar). Null when there's no active sort to flip.
+  let flip: string | null = null
+  if (current) {
+    const flipped = current.direction === "asc" ? "desc" : "asc"
+    flip = buildHref(current.column, flipped)
+  }
+
+  return {
+    perColumn,
+    clear: buildHref(null, null),
+    flip,
+  }
 }
