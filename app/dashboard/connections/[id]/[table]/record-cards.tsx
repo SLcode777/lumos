@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils"
 import { Cell } from "./cell"
 import { ClickableCard } from "./clickable-card"
 import { stringifyForTitle } from "@/lib/cell-format"
+import { FkLabels, lookupFkLabel } from "@/lib/resolve-fks"
 
 const VISIBLE_FIELDS = 6
 
@@ -15,10 +16,11 @@ type Props = Readonly<{
   rows: Record<string, unknown>[]
   primary: ColumnInfo
   fkIndex: FkIndex
+  fkLabels: FkLabels
   rowHrefs: string[]
 }>
 
-export function RecordCards({ columns, rows, primary, fkIndex, rowHrefs }: Props) {
+export function RecordCards({ columns, rows, primary, fkIndex, fkLabels, rowHrefs }: Props) {
   if (rows.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center p-12 text-center">
@@ -47,7 +49,13 @@ export function RecordCards({ columns, rows, primary, fkIndex, rowHrefs }: Props
           <CardContent>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
               {visibleCols.map((col) => (
-                <FieldChip key={col.name} column={col} value={row[col.name]} fk={fkIndex.get(col.name)} />
+                <FieldChip
+                  key={col.name}
+                  column={col}
+                  value={row[col.name]}
+                  fk={fkIndex.get(col.name)}
+                  fkLabels={fkLabels}
+                />
               ))}
             </div>
             {hiddenCount > 0 && <p className="mt-3 text-xs text-muted-foreground">+{hiddenCount} more fields</p>}
@@ -58,8 +66,20 @@ export function RecordCards({ columns, rows, primary, fkIndex, rowHrefs }: Props
   )
 }
 
-function FieldChip({ column, value, fk }: { column: ColumnInfo; value: unknown; fk: ReturnType<FkIndex["get"]> }) {
+function FieldChip({
+  column,
+  value,
+  fk,
+  fkLabels,
+}: {
+  column: ColumnInfo
+  value: unknown
+  fk: ReturnType<FkIndex["get"]>
+  fkLabels: FkLabels
+}) {
   const isFk = Boolean(fk)
+  const fkLabel = lookupFkLabel(fkLabels, fk, value)
+
   return (
     <div
       className={cn(
@@ -71,7 +91,7 @@ function FieldChip({ column, value, fk }: { column: ColumnInfo; value: unknown; 
       <div className="mt-1 flex items-center gap-1.5">
         <TypeIcon column={column} isFk={isFk} />
         <span className={cn("truncate text-sm", isFk && "text-violet-700 dark:text-violet-300")}>
-          <Cell value={value} column={column} />
+          <Cell value={value} column={column} fkLabel={fkLabel} />
         </span>
       </div>
     </div>

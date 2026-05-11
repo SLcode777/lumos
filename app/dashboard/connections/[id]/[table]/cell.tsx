@@ -14,6 +14,7 @@ import {
 } from "@/lib/cell-format"
 import type { ColumnInfo } from "@/lib/introspect"
 import { cn } from "@/lib/utils"
+import { FkLabelSlot } from "@/lib/resolve-fks"
 
 const MAX_TEXT_PREVIEW = 80
 
@@ -21,6 +22,13 @@ type Props = Readonly<{
   value: unknown
   column: ColumnInfo
   mode?: "compact" | "full"
+  /**
+   * When this column is an FK and the resolver has a result for the current
+   * value, render the resolved label (with the raw value in `title`) instead
+   * of the type-aware dispatch. Orphan FKs render raw + a "(missing)" tag.
+   * `undefined` means: not an FK / null value / not resolvable → existing path.
+   */
+  fkLabel?: FkLabelSlot
 }>
 
 /**
@@ -30,12 +38,42 @@ type Props = Readonly<{
  * Dispatch is on the column's normalized `data_type`. Falls back to a
  * stringified preview for any unknown type.
  */
-export function Cell({ value, column, mode = "compact" }: Props) {
+export function Cell({ value, column, mode = "compact", fkLabel }: Props) {
   if (value === null || value === undefined) {
     if (mode === "full") {
       return <span className="text-muted-foreground italic">No value</span>
     }
     return <span className="text-muted-foreground italic">—</span>
+  }
+
+  // FK label resolution short-circuits the type-aware path.
+  // Raw value remains accessible via the `title` attribute on hover.
+  if (fkLabel?.kind === "hit") {
+    const raw = String(value)
+    if (mode === "full") {
+      return (
+        <span title={raw} className="wrap-break-words">
+          {fkLabel.label}
+        </span>
+      )
+    }
+    return <span title={raw}>{truncate(fkLabel.label, MAX_TEXT_PREVIEW)}</span>
+  }
+  if (fkLabel?.kind === "missing") {
+    const raw = String(value)
+    if (mode === "full") {
+      return (
+        <span title="Target row not found" className="wrap-break-words">
+          <span className="font-mono text-xs">{raw}</span> <em className="text-muted-foreground">(missing)</em>
+        </span>
+      )
+    }
+    return (
+      <span title={`${raw} — target row not found`}>
+        <span className="font-mono text-xs">{truncate(raw, MAX_TEXT_PREVIEW)}</span>{" "}
+        <em className="text-muted-foreground not-italic">(missing)</em>
+      </span>
+    )
   }
 
   // Arrays first: udt_name is the only reliable signal (pg returns `data_type`

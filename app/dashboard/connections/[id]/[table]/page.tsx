@@ -19,6 +19,7 @@ import { Cell } from "./cell"
 import { RowDetailPanel } from "./row-detail-panel"
 import { parseSortParams, SortState } from "@/lib/sort"
 import { ColumnInfo } from "@/lib/introspect"
+import { lookupFkLabel, resolveForeignKeyLabels } from "@/lib/resolve-fks"
 
 const PAGE_SIZES = [25, 50, 100] as const
 const DEFAULT_PAGE_SIZE = 50
@@ -88,6 +89,18 @@ export default async function TableViewPage({
     queryError = "Couldn't fetch rows from this table."
   }
 
+  // Resolve FK labels for the page in ONE batch per target table.
+  // Best-effort: if it fails entirely, we fall back to raw values silently.
+  let fkLabels = new Map<string, string | null>()
+  if (!queryError) {
+    fkLabels = await resolveForeignKeyLabels({
+      pool,
+      schema,
+      fromTable: tableInfo,
+      rows,
+    })
+  }
+
   const totalEstimate = tableInfo.rowCountEstimate >= 0 ? tableInfo.rowCountEstimate : 0
   const totalPages = Math.max(1, Math.ceil(totalEstimate / pageSize))
 
@@ -125,11 +138,21 @@ export default async function TableViewPage({
     ? {
         title: stringifyForTitle(found.row[primary.name]),
         subtitle: `Row ${found.index + 1} of ${rows.length}`,
-        fields: tableInfo.columns.map((col) => ({
-          column: col,
-          isFk: fkIndex.has(col.name),
-          content: <Cell value={found.row[col.name]} column={col} mode="full" />,
-        })),
+        fields: tableInfo.columns.map((col) => {
+          const fkInfo = fkIndex.get(col.name)
+          return {
+            column: col,
+            isFk: Boolean(fkInfo),
+            content: (
+              <Cell
+                value={found.row[col.name]}
+                column={col}
+                mode="full"
+                fkLabel={lookupFkLabel(fkLabels, fkInfo, found.row[col.name])}
+              />
+            ),
+          }
+        }),
         prevHref: found.index > 0 ? rowHrefs[found.index - 1] : null,
         nextHref: found.index < rows.length - 1 ? rowHrefs[found.index + 1] : null,
       }
@@ -141,7 +164,14 @@ export default async function TableViewPage({
       {queryError ? (
         <InlineErrorState message={queryError} />
       ) : (
-        <RecordCards columns={tableInfo.columns} rows={rows} primary={primary} fkIndex={fkIndex} rowHrefs={rowHrefs} />
+        <RecordCards
+          columns={tableInfo.columns}
+          rows={rows}
+          primary={primary}
+          fkIndex={fkIndex}
+          fkLabels={fkLabels}
+          rowHrefs={rowHrefs}
+        />
       )}
       <PaginationControls page={page} pageSize={pageSize} totalPages={totalPages} totalEstimate={totalEstimate} />
       <RowDetailPanel data={panelData} closeHref={closeHref} tableName={decodedTable} />
