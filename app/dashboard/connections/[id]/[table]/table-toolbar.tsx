@@ -12,6 +12,7 @@ type Props = Readonly<{
   sortHrefs: {
     perColumn: Record<string, string>
     clear: string
+    flip: string | null
   }
 }>
 
