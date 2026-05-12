@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import type { ColumnInfo } from "@/lib/introspect"
 import { getTableIcon } from "@/lib/table-icon"
 import { cn } from "@/lib/utils"
+import { humanizeTableName, InverseRelationMeta, pluralizeRecord } from "@/lib/inverse-relations"
 
 type PanelData = {
   title: string
@@ -21,6 +22,7 @@ type PanelData = {
    * (navigate to the target row's detail view).
    */
   fields: { column: ColumnInfo; content: React.ReactNode; isFk: boolean }[]
+  inverseRelations: { meta: InverseRelationMeta; count: number }[]
   prevHref: string | null
   nextHref: string | null
 }
@@ -130,13 +132,13 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
                   className={cn(
                     "rounded-xl border bg-card p-4 shadow-sm ring-1 ring-foreground/5",
                     isFk &&
-                      "border-violet-200 bg-violet-50/60 ring-violet-200/40 dark:border-violet-900 dark:bg-violet-950/30 dark:ring-violet-900/30",
+                      "border-violet-200 bg-violet-50/60 ring-violet-200/40 dark:border-violet-900 dark:bg-violet-950/30 dark:ring-violet-900/30"
                   )}
                 >
                   <p
                     className={cn(
-                      "mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide",
-                      isFk ? "text-violet-700 dark:text-violet-300" : "text-muted-foreground",
+                      "mb-1 flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase",
+                      isFk ? "text-violet-700 dark:text-violet-300" : "text-muted-foreground"
                     )}
                   >
                     {isFk && <Link2 className="h-3 w-3" aria-hidden />}
@@ -145,10 +147,43 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
                   <div className="text-sm">{content}</div>
                 </div>
               ))}
+              {stableData.inverseRelations.map(({ meta, count }) => (
+                <InverseRelationCard
+                  key={`${meta.sourceSchema}.${meta.sourceTable}.${meta.fromColumn}`}
+                  meta={meta}
+                  count={count}
+                />
+              ))}
             </div>
           </>
         )}
       </SheetContent>
     </Sheet>
+  )
+}
+
+function InverseRelationCard({ meta, count }: { meta: InverseRelationMeta; count: number }) {
+  const empty = count === 0
+  return (
+    <div
+      className={cn(
+        "rounded-xl border bg-card p-4 shadow-sm ring-1 ring-foreground/5",
+        !empty &&
+          "border-violet-200 bg-violet-50/60 ring-violet-200/40 dark:border-violet-900 dark:bg-violet-950/30 dark:ring-violet-900/30",
+        empty && "opacity-60"
+      )}
+    >
+      <p
+        className={cn(
+          "mb-1 flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase",
+          !empty ? "text-violet-700 dark:text-violet-300" : "text-muted-foreground"
+        )}
+      >
+        <Link2 className="h-3 w-3" aria-hidden />
+        {humanizeTableName(meta.sourceTable)}
+        {meta.ambiguous && <span className="ml-1 text-muted-foreground/70 normal-case">({meta.fromColumn})</span>}
+      </p>
+      <div className="text-sm">{pluralizeRecord(count)}</div>
+    </div>
   )
 }

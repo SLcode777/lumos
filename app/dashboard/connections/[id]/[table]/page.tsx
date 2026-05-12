@@ -20,6 +20,7 @@ import { RowDetailPanel } from "./row-detail-panel"
 import { parseSortParams, SortState } from "@/lib/sort"
 import { ColumnInfo } from "@/lib/introspect"
 import { lookupFkLabel, resolveForeignKeyLabels } from "@/lib/resolve-fks"
+import { countInverseRelationsForPage, inverseCountKey } from "@/lib/inverse-relations"
 
 const PAGE_SIZES = [25, 50, 100] as const
 const DEFAULT_PAGE_SIZE = 50
@@ -89,18 +90,23 @@ export default async function TableViewPage({
     queryError = "Couldn't fetch rows from this table."
   }
 
-  // Resolve FK labels for the page in ONE batch per target table.
+  // Resolve FK labels and inverse relations for the page in ONE batch per target table.
   // Best-effort: if it fails entirely, we fall back to raw values silently.
   let fkLabels = new Map<string, string | null>()
-  if (!queryError) {
-    fkLabels = await resolveForeignKeyLabels({
-      pool,
-      schema,
-      fromTable: tableInfo,
-      rows,
-    })
+  let pageInverseRelations: Awaited<ReturnType<typeof countInverseRelationsForPage>> = {
+    meta: [],
+    counts: new Map(),
   }
-
+  if (!queryError) {
+    // Both helpers depend only on `rows`. Run them in parallel on the shared
+    // pool — no inter-dependency, and the wall-time wins on warm pools.
+    const [labels, inv] = await Promise.all([
+      resolveForeignKeyLabels({ pool, schema, fromTable: tableInfo, rows }),
+      countInverseRelationsForPage({ pool, schema, currentTable: tableInfo, rows }),
+    ])
+    fkLabels = labels
+    pageInverseRelations = inv
+  }
   const totalEstimate = tableInfo.rowCountEstimate >= 0 ? tableInfo.rowCountEstimate : 0
   const totalPages = Math.max(1, Math.ceil(totalEstimate / pageSize))
 
@@ -153,6 +159,10 @@ export default async function TableViewPage({
             ),
           }
         }),
+        inverseRelations: pageInverseRelations.meta.map((m) => ({
+          meta: m,
+          count: pageInverseRelations.counts.get(inverseCountKey(String(found.row[tableInfo.primaryKey[0]]), m)) ?? 0,
+        })),
         prevHref: found.index > 0 ? rowHrefs[found.index - 1] : null,
         nextHref: found.index < rows.length - 1 ? rowHrefs[found.index + 1] : null,
       }
@@ -168,8 +178,10 @@ export default async function TableViewPage({
           columns={tableInfo.columns}
           rows={rows}
           primary={primary}
+          pkColumnName={tableInfo.primaryKey[0]}
           fkIndex={fkIndex}
           fkLabels={fkLabels}
+          pageInverseRelations={pageInverseRelations}
           rowHrefs={rowHrefs}
         />
       )}

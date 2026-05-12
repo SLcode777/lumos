@@ -8,19 +8,37 @@ import { Cell } from "./cell"
 import { ClickableCard } from "./clickable-card"
 import { stringifyForTitle } from "@/lib/cell-format"
 import { FkLabels, lookupFkLabel } from "@/lib/resolve-fks"
+import {
+  humanizeTableName,
+  inverseCountKey,
+  InverseRelationMeta,
+  PageInverseRelations,
+  pluralizeRecord,
+} from "@/lib/inverse-relations"
 
-const VISIBLE_FIELDS = 6
+const VISIBLE_ITEMS = 6
 
 type Props = Readonly<{
   columns: ColumnInfo[]
   rows: Record<string, unknown>[]
   primary: ColumnInfo
+  pkColumnName: string
   fkIndex: FkIndex
   fkLabels: FkLabels
+  pageInverseRelations: PageInverseRelations
   rowHrefs: string[]
 }>
 
-export function RecordCards({ columns, rows, primary, fkIndex, fkLabels, rowHrefs }: Props) {
+export function RecordCards({
+  columns,
+  rows,
+  primary,
+  pkColumnName,
+  fkIndex,
+  fkLabels,
+  pageInverseRelations,
+  rowHrefs,
+}: Props) {
   if (rows.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center p-12 text-center">
@@ -30,8 +48,17 @@ export function RecordCards({ columns, rows, primary, fkIndex, fkLabels, rowHref
   }
 
   const otherCols = columns.filter((c) => c.name !== primary.name)
-  const visibleCols = otherCols.slice(0, VISIBLE_FIELDS)
-  const hiddenCount = otherCols.length - visibleCols.length
+
+  // Items = field columns first, then inverse relations.
+  // The SET of items is fixed across rows (only counts vary), so we slice once.
+  // Layouts (Phase 10) will let users override this ordering.
+  const totalItems = otherCols.length + pageInverseRelations.meta.length
+  const visibleFieldCount = Math.min(otherCols.length, VISIBLE_ITEMS)
+  const visibleInverseCount = Math.max(0, Math.min(pageInverseRelations.meta.length, VISIBLE_ITEMS - visibleFieldCount))
+
+  const hiddenCount = totalItems - visibleFieldCount - visibleInverseCount
+  const visibleCols = otherCols.slice(0, visibleFieldCount)
+  const visibleInverse = pageInverseRelations.meta.slice(0, visibleInverseCount)
 
   return (
     <div className="flex-1 space-y-3 overflow-auto p-4">
@@ -57,6 +84,16 @@ export function RecordCards({ columns, rows, primary, fkIndex, fkLabels, rowHref
                   fkLabels={fkLabels}
                 />
               ))}
+              {visibleInverse.map((meta) => {
+                const count = pageInverseRelations.counts.get(inverseCountKey(String(row[pkColumnName]), meta)) ?? 0
+                return (
+                  <InverseRelationChip
+                    key={`${meta.sourceSchema}.${meta.sourceTable}.${meta.fromColumn}`}
+                    meta={meta}
+                    count={count}
+                  />
+                )
+              })}
             </div>
             {hiddenCount > 0 && <p className="mt-3 text-xs text-muted-foreground">+{hiddenCount} more fields</p>}
           </CardContent>
@@ -92,6 +129,30 @@ function FieldChip({
         <TypeIcon column={column} isFk={isFk} />
         <span className={cn("truncate text-sm", isFk && "text-violet-700 dark:text-violet-300")}>
           <Cell value={value} column={column} fkLabel={fkLabel} />
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function InverseRelationChip({ meta, count }: { meta: InverseRelationMeta; count: number }) {
+  const empty = count === 0
+  return (
+    <div
+      className={cn(
+        "rounded-md border bg-card p-2",
+        !empty && "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30",
+        empty && "opacity-60"
+      )}
+    >
+      <p className="truncate text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+        {humanizeTableName(meta.sourceTable)}
+        {meta.ambiguous && <span className="ml-1 text-muted-foreground/70 normal-case">({meta.fromColumn})</span>}
+      </p>
+      <div className="mt-1 flex items-center gap-1.5">
+        <Link2 className={cn("h-3 w-3 shrink-0", empty ? "text-muted-foreground" : "text-violet-500")} />
+        <span className={cn("truncate text-sm", !empty && "text-violet-700 dark:text-violet-300")}>
+          {pluralizeRecord(count)}
         </span>
       </div>
     </div>
