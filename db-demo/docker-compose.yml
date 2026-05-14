@@ -1,7 +1,7 @@
 services:
-  demo-db:
+  db-demo:
     image: postgres:16-alpine
-    container_name: lumos-demo-db
+    container_name: lumos-db-demo
     restart: unless-stopped
     environment:
       POSTGRES_USER: demo
@@ -11,7 +11,7 @@ services:
       # Host port 5434 to avoid clashing with Lumos's app DB on 5433.
       - "5434:5432"
     volumes:
-      - demo-db-data:/var/lib/postgresql/data
+      - db-demo-data:/var/lib/postgresql/data
       # Postgres auto-runs every .sql in this dir on first start (only).
       - ./init:/docker-entrypoint-initdb.d:ro
     healthcheck:
@@ -21,4 +21,4 @@ services:
       retries: 5
 
 volumes:
-  demo-db-data:
+  db-demo-data:

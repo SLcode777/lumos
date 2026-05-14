@@ -36,8 +36,8 @@ Whichever option you pick below, your `dev` environment must define:
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Connection string for the application database (e.g. `postgresql://lumos:<password>@localhost:5433/lumos`) |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT` | Used by Docker Compose to bootstrap the application Postgres container |
+| `DATABASE_URL` | SQLite file path for the application database. Local dev: `file:./lumos.db`. In Docker: `file:/data/lumos.db` (mounted volume). |
+| `TEST_PG_URL` | *(optional, tests only)* Postgres URL used by integration tests in `lib/{connections,pool-manager,introspect}.test.ts`. Defaults match the bundled `db-demo` container: `postgresql://demo:demo@localhost:5434/shop`. |
 | `BETTER_AUTH_SECRET` | Random 32-byte secret used by Better Auth to sign sessions |
 | `BETTER_AUTH_URL` | Public URL of this Lumos instance (e.g. `http://localhost:3000` in dev) |
 | `REGISTRATION_MODE` | `open`, `invite-only` (default), or `closed` — controls how new users can sign up |
@@ -49,9 +49,6 @@ Whichever option you pick below, your `dev` environment must define:
 ```bash
 # BETTER_AUTH_SECRET, ENCRYPTION_KEY (any 32-byte base64 secret)
 openssl rand -base64 32
-
-# POSTGRES_PASSWORD (alphanumeric, URL-safe in connection strings)
-pwgen -sB 32 1
 ```
 
 > ⚠️ Keep `ENCRYPTION_KEY` and `BETTER_AUTH_SECRET` confidential. Losing `ENCRYPTION_KEY` means losing access to all stored connection strings. Rotating it requires re-encrypting existing rows.
@@ -92,9 +89,6 @@ Before:
   "db:migrate": "infisical run --env=dev -- prisma migrate dev",
   "db:studio": "infisical run --env=dev -- prisma studio",
   "db:reset": "infisical run --env=dev -- prisma migrate reset",
-  "db:up": "infisical run --env=dev -- docker compose up -d postgres-app",
-  "db:down": "infisical run --env=dev -- docker compose down",
-  "db:logs": "docker compose logs -f postgres-app",
   "test": "infisical run --env=dev -- vitest run",
   "test:watch": "infisical run --env=dev -- vitest",
   "test:ui": "infisical run --env=dev -- vitest --ui"
@@ -114,9 +108,6 @@ After:
   "db:migrate": "prisma migrate dev",
   "db:studio": "prisma studio",
   "db:reset": "prisma migrate reset",
-  "db:up": "docker compose up -d postgres-app",
-  "db:down": "docker compose down",
-  "db:logs": "docker compose logs -f postgres-app",
   "test": "vitest run",
   "test:watch": "vitest",
   "test:ui": "vitest --ui"
@@ -142,10 +133,7 @@ Once your secrets are configured (Option A or B above):
 # Install dependencies
 pnpm install
 
-# Start the application database (PostgreSQL via Docker Compose)
-pnpm db:up
-
-# Apply database migrations
+# Apply database migrations (creates lumos.db locally on first run)
 pnpm db:migrate
 
 # Start the dev server
@@ -158,12 +146,22 @@ The app is now running at [http://localhost:3000](http://localhost:3000).
 
 | Script | Purpose |
 |---|---|
-| `pnpm db:up` | Start the application Postgres container |
-| `pnpm db:down` | Stop it |
-| `pnpm db:logs` | Tail Postgres logs |
 | `pnpm db:migrate` | Create and apply a Prisma migration |
 | `pnpm db:studio` | Open Prisma Studio (web UI for the application database) |
 | `pnpm db:reset` | ⚠️ Drop all data and replay migrations from scratch |
+
+### Running the integration tests
+
+Unit tests run with no extra setup (`pnpm test`). The integration tests in `lib/{connections,pool-manager,introspect}.test.ts` open a real `pg` pool — they need a throwaway Postgres pointed at by `TEST_PG_URL`. The repo ships a `db-demo/` container that does the job (also used as a connection target for trying out Lumos locally):
+
+```bash
+cd db-demo && docker compose up -d   # starts Postgres on localhost:5434, auto-seeds from db-demo/init/*.sql
+# In your env (Infisical or .env):
+# TEST_PG_URL=postgresql://demo:demo@localhost:5434/shop
+pnpm test
+```
+
+CI uses its own service-container Postgres seeded from `db-test/fixtures/*.sql` — no need to share local URLs.
 
 ## Self-host with Docker Compose
 
@@ -198,10 +196,9 @@ Lumos is now reachable at [http://localhost:3000](http://localhost:3000). The fi
 
 | Container | Purpose |
 |---|---|
-| `lumos-app` | The Next.js application |
-| `lumos-db` | PostgreSQL 16 (the application DB — stores users, sessions, encrypted connection strings) |
+| `lumos-app` | The Next.js application (stores users, sessions, encrypted connection strings in an embedded SQLite file at `/data/lumos.db`) |
 
-Database migrations run automatically on every `docker compose up`. The Postgres data persists in a named volume (`postgres-app-data`) — `docker compose down` keeps it; `docker compose down -v` wipes it.
+Database migrations run automatically on every `docker compose up`. The SQLite database file persists in a named volume (`lumos-data`) — `docker compose down` keeps it; `docker compose down -v` wipes it. **Backups are trivial**: `docker cp lumos-app:/data/lumos.db ./backup-$(date +%F).db`.
 
 ### Production deployment
 

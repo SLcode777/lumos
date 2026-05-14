@@ -33,7 +33,11 @@ jobs:
     env:
       # Static, throwaway values — CI never touches real secrets or production
       # data. They exist purely so the app + tests can boot.
-      DATABASE_URL: postgresql://lumos:lumos@localhost:5433/lumos_test?schema=public
+      DATABASE_URL: file:./test.db
+      # Throwaway Postgres for integration tests that exercise the pg pool /
+      # introspection code (lib/connections.test.ts, lib/pool-manager.test.ts,
+      # lib/introspect.test.ts). Points at the postgres service container above.
+      TEST_PG_URL: postgresql://lumos:lumos@localhost:5433/lumos_test?schema=public
       ENCRYPTION_KEY: bGdoTGNVT1F0VjZJVTV6eFJSTHl5UUNmUWZreXBRQXM=
       BETTER_AUTH_SECRET: ci-secret-not-for-prod-use-only-32bytes
       BETTER_AUTH_URL: http://localhost:3000
@@ -63,6 +67,11 @@ jobs:
 
       - name: Apply database migrations
         run: pnpm exec prisma migrate deploy
+      
+      - name: Seed test Postgres with fixtures
+        run: |
+          psql "$TEST_PG_URL" -f db-test/fixtures/01_schema.sql
+          psql "$TEST_PG_URL" -f db-test/fixtures/02_seed.sql
 
       # Build first: it generates `.next/types/` (PageProps, LayoutProps, etc.)
       # that the typecheck step needs, AND validates the build itself.

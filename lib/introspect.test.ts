@@ -7,10 +7,12 @@ let pool: Pool
 let schema: DatabaseSchema
 
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL not set — run via `pnpm test`")
+  if (!process.env.TEST_PG_URL) {
+    throw new Error(
+      "TEST_PG_URL not set — start the db-demo container (cd db-demo && docker compose up -d) and set TEST_PG_URL=postgresql://demo:demo@localhost:5434/shop"
+    )
   }
-  pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  pool = new Pool({ connectionString: process.env.TEST_PG_URL })
   schema = await introspectSchema(pool)
 }, 15_000)
 
@@ -26,34 +28,34 @@ describe("introspectSchema", () => {
     }
   })
 
-  it("returns the lumos app tables", () => {
+  it("returns the demo e-commerce tables", () => {
     const names = schema.tables.map((t) => t.name)
-    // Better Auth lowercased the User model to "user" via @@map. Same for
-    // session/account/verification.
-    expect(names).toContain("user")
-    expect(names).toContain("Connection")
-    expect(names).toContain("ConnectionAccess")
-    expect(names).toContain("Invitation")
+    expect(names).toContain("users")
+    expect(names).toContain("products")
+    expect(names).toContain("orders")
+    expect(names).toContain("order_items")
+    expect(names).toContain("reviews")
+    expect(names).toContain("categories")
   })
 
-  it("detects the User primary key", () => {
-    const userTable = schema.tables.find((t) => t.name === "user")
-    expect(userTable?.primaryKey).toEqual(["id"])
+  it("detects the users primary key (UUID)", () => {
+    const usersTable = schema.tables.find((t) => t.name === "users")
+    expect(usersTable?.primaryKey).toEqual(["id"])
   })
 
-  it("detects the Connection.userId → user.id foreign key", () => {
-    const fk = schema.foreignKeys.find((f) => f.fromTable === "Connection" && f.fromColumns.includes("userId"))
+  it("detects the orders.user_id → users.id foreign key", () => {
+    const fk = schema.foreignKeys.find((f) => f.fromTable === "orders" && f.fromColumns.includes("user_id"))
     expect(fk).toBeDefined()
-    expect(fk?.toTable).toBe("user")
+    expect(fk?.toTable).toBe("users")
     expect(fk?.toColumns).toEqual(["id"])
   })
 
   it("returns columns ordered by ordinal_position", () => {
-    const userTable = schema.tables.find((t) => t.name === "user")
-    expect(userTable).toBeDefined()
-    if (!userTable) return
-    for (let i = 1; i < userTable.columns.length; i++) {
-      expect(userTable.columns[i].ordinalPosition).toBeGreaterThan(userTable.columns[i - 1].ordinalPosition)
+    const usersTable = schema.tables.find((t) => t.name === "users")
+    expect(usersTable).toBeDefined()
+    if (!usersTable) return
+    for (let i = 1; i < usersTable.columns.length; i++) {
+      expect(usersTable.columns[i].ordinalPosition).toBeGreaterThan(usersTable.columns[i - 1].ordinalPosition)
     }
   })
 
@@ -65,11 +67,11 @@ describe("introspectSchema", () => {
   })
 
   it("captures column metadata: nullability, defaults, types", () => {
-    const invitationTable = schema.tables.find((t) => t.name === "Invitation")
-    expect(invitationTable).toBeDefined()
-    if (!invitationTable) return
-    const tokenHash = invitationTable.columns.find((c) => c.name === "tokenHash")
-    expect(tokenHash?.dataType).toBe("text") // Prisma maps String to text
-    expect(tokenHash?.isNullable).toBe(false)
+    const usersTable = schema.tables.find((t) => t.name === "users")
+    expect(usersTable).toBeDefined()
+    if (!usersTable) return
+    const email = usersTable.columns.find((c) => c.name === "email")
+    expect(email?.dataType).toBe("text")
+    expect(email?.isNullable).toBe(false)
   })
 })

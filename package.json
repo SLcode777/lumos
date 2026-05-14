@@ -13,9 +13,6 @@
     "db:migrate": "infisical run --env=dev -- prisma migrate dev",
     "db:studio": "infisical run --env=dev -- prisma studio",
     "db:reset": "infisical run --env=dev -- prisma migrate reset",
-    "db:up": "infisical run --env=dev -- docker compose up -d postgres-app",
-    "db:down": "infisical run --env=dev -- docker compose down",
-    "db:logs": "docker compose logs -f postgres-app",
     "test": "infisical run --env=dev -- vitest run",
     "test:watch": "infisical run --env=dev -- vitest",
     "test:ui": "infisical run --env=dev -- vitest --ui",
@@ -25,9 +22,10 @@
     "docker:logs": "infisical run --env=dev -- docker compose logs -f app"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "better-auth": "^1.6.9",
+    "better-sqlite3": "^12.10.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",

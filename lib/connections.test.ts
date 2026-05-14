@@ -100,12 +100,15 @@ describe("buildConnectionStringFromFields", () => {
 
 describe("testConnection", () => {
   it("returns ok for a valid local connection", async () => {
-    // Reuse the dev connection string from DATABASE_URL (set by Infisical).
-    const url = process.env.DATABASE_URL
+    // A throwaway Postgres URL for integration tests. NOT the app's metadata DB
+    // (which is SQLite). Locally: the db-demo container (cd db-demo && docker
+    // compose up -d). In CI: the service container defined in .github/workflows/ci.yml.
+    const url = process.env.TEST_PG_URL
     if (!url) {
-      throw new Error("DATABASE_URL not set — run via `pnpm test`")
-    }
-    // Local dev DB doesn't have SSL configured.
+      throw new Error(
+        "TEST_PG_URL not set — start the db-demo container (cd db-demo && docker compose up -d) and set TEST_PG_URL=postgresql://demo:demo@localhost:5434/shop"
+      )
+    } // Local dev DB doesn't have SSL configured.
     const result = await testConnection(url, false)
     expect(result).toEqual({ ok: true })
   }, 10_000) // generous timeout — connect can be slow on first run

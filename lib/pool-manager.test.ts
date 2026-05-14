@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { __resetPoolManagerForTests, getConnectionPool, invalidateConnectionPool } from "@/lib/pool-manager"
 
-const DEV_URL = process.env.DATABASE_URL ?? ""
+const DEV_URL = process.env.TEST_PG_URL ?? ""
 
 beforeEach(async () => {
   await __resetPoolManagerForTests()

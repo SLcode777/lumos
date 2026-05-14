@@ -58,3 +58,9 @@ Thumbs.db
 CLAUDE.local.md
 
 /generated/prisma
+
+# SQLite app DB (local dev)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm

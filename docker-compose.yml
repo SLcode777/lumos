@@ -1,43 +1,32 @@
+# docker-compose.yml — for contributors building from source.
+# End-users: see docker-compose.prod.yml which pulls the
+# pre-built image from GHCR.
 services:
-  postgres-app:
-    image: postgres:16-alpine
-    container_name: lumos-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-lumos}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lumos}
-      POSTGRES_DB: ${POSTGRES_DB:-lumos}
-    ports:
-      # Host port 5433 by default to avoid collisions with a local Postgres on 5432.
-      # Override with POSTGRES_PORT in .env if needed.
-      - "${POSTGRES_PORT:-5433}:5432"
-    volumes:
-      - postgres-app-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lumos} -d ${POSTGRES_DB:-lumos}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: lumos-app
     restart: unless-stopped
-    depends_on:
-      postgres-app:
-        condition: service_healthy
     environment:
-      # Inside the compose network, reach Postgres by service name + internal port.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-lumos}:${POSTGRES_PASSWORD:-lumos}@postgres-app:5432/${POSTGRES_DB:-lumos}?schema=public
+      # SQLite file path inside the container, persisted via the lumos-data volume.
+      DATABASE_URL: file:/data/lumos.db
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
       REGISTRATION_MODE: ${REGISTRATION_MODE:-invite-only}
       INVITATION_TTL_DAYS: ${INVITATION_TTL_DAYS:-7}
+    volumes:
+      - lumos-data:/data
     ports:
       - "${APP_PORT:-3000}:3000"
+    # Makes `host.docker.internal` resolve to the host's IP from inside the
+    # container. Native on Docker Desktop (Mac/Windows); on Linux it requires
+    # this explicit mapping. Lets users connect to a Postgres running on the
+    # host (e.g. the bundled db-demo container on port 5434) without hard-
+    # coding host IPs.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # ────────────────────────────────────────────────────────────────────────────
   # Optional reverse-proxy for HTTPS in front of the app.
@@ -59,6 +48,6 @@ services:
   #     - caddy-config:/config
 
 volumes:
-  postgres-app-data:
+  lumos-data:
   # caddy-data:
   # caddy-config:

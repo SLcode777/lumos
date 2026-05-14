@@ -79,7 +79,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 # Entrypoint script: runs `prisma migrate deploy` then execs the CMD.
 COPY --chown=nextjs:nodejs scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+# Make the entrypoint executable and create the SQLite data dir owned by the
+# non-root user that will run the app.
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
+ && mkdir -p /data \
+ && chown nextjs:nodejs /data
 
 USER nextjs
 EXPOSE 3000
