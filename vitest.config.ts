@@ -6,5 +6,9 @@ export default defineConfig({
   test: {
     setupFiles: ["./vitest.setup.ts"],
     environment: "node",
+    // Run test files sequentially. Several suites (access, users, invitations,
+    // registration) share the single SQLite app DB; running them in parallel
+    // workers causes write-lock contention and intermittent Prisma timeouts.
+    fileParallelism: false,
   },
 })

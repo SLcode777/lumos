@@ -70,8 +70,10 @@ jobs:
       
       - name: Seed test Postgres with fixtures
         run: |
-          psql "$TEST_PG_URL" -f db-test/fixtures/01_schema.sql
-          psql "$TEST_PG_URL" -f db-test/fixtures/02_seed.sql
+          # Strip Prisma-only `?schema=public` query param — psql rejects it.
+          PSQL_URL="${TEST_PG_URL%%\?*}"
+          psql "$PSQL_URL" -f db-test/fixtures/01_schema.sql
+          psql "$PSQL_URL" -f db-test/fixtures/02_seed.sql
 
       # Build first: it generates `.next/types/` (PageProps, LayoutProps, etc.)
       # that the typecheck step needs, AND validates the build itself.
