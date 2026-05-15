@@ -17,6 +17,7 @@
     "test:watch": "infisical run --env=dev -- vitest",
     "test:ui": "infisical run --env=dev -- vitest --ui",
     "docker:up": "infisical run --env=dev -- docker compose up -d --build",
+    "docker:rebuild": "infisical run --env=dev -- bash -c 'docker compose build --no-cache && docker compose up -d --force-recreate'",
     "docker:down": "infisical run --env=dev -- docker compose down",
     "docker:wipe": "infisical run --env=dev -- docker compose down -v",
     "docker:logs": "infisical run --env=dev -- docker compose logs -f app"

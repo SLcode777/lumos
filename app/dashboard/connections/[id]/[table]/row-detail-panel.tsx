@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createElement, useState } from "react"
-import { ChevronLeft, ChevronRight, Link2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Link2, XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
@@ -82,7 +82,16 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
         // We need the same selector prefix here, otherwise tailwind-merge keeps
         // both classes and the more specific one (the default) wins via CSS.
         className="flex w-full flex-col gap-0 p-0 data-[side=right]:sm:max-w-160"
+        overlayHref={closeHref}
+        overlayAriaLabel="Close detail panel"
+        showCloseButton={false}
       >
+        <Button asChild variant="ghost" className="absolute top-4 right-4 bg-secondary" size="icon-sm">
+          <Link href={closeHref} aria-label="Close detail panel" scroll={false}>
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </Link>
+        </Button>
         {stableData && (
           <>
             <SheetHeader className="border-b px-6 py-4">
