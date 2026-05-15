@@ -2,13 +2,12 @@ name: Docker publish
 
 on:
   push:
-    branches: [master]
     tags: ["v*"]
+  workflow_dispatch:
 
-# Cancel in-flight runs on the same ref. Tags don't cancel each other.
 concurrency:
   group: docker-publish-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref_type == 'branch' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -44,13 +43,12 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=sha-
-          # Always tag pushes to master as :latest (in addition to :master).
+          # :latest = latest non-prerelease semver tag, or manual workflow_dispatch on master.
           flavor: |
-            latest=${{ github.ref == 'refs/heads/master' }}
+            latest=auto
 
       - name: Build and push
         uses: docker/build-push-action@v5

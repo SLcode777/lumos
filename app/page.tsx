@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Eye, FileText, Code, Pencil, Sparkles } from "lucide-react"
+import { Eye, FileText, Code, Pencil, Sparkles, LogIn } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -35,6 +35,11 @@ export default function Page() {
           <Button asChild variant="ghost" size="icon">
             <Link href={REPO_URL} target="_blank" rel="noreferrer" aria-label="View source on GitHub">
               <Code />
+            </Link>
+          </Button>
+          <Button asChild size="sm" className="ml-2">
+            <Link href="/signin">
+              <LogIn /> Sign in
             </Link>
           </Button>
         </div>

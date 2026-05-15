@@ -1,10 +1,12 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import Image from "next/image"
 
 import { signOut } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 type AppHeaderProps = {
   user: {
@@ -18,7 +20,7 @@ export function AppHeader({ user }: AppHeaderProps) {
 
   const handleSignOut = async () => {
     await signOut()
-    router.push("/signin")
+    router.push("/")
     router.refresh()
   }
 
@@ -29,6 +31,13 @@ export function AppHeader({ user }: AppHeaderProps) {
         <span className="font-serif text-3xl tracking-tight">Lumos</span>
       </div>
       <div className="flex items-center gap-3">
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/admin/users">Users</Link>
+        </Button>
+        <Button asChild variant="ghost" size="sm">
+          <Link href="/admin/invitations">Invitations</Link>
+        </Button>
+        <ThemeToggle />
         <span className="text-sm text-muted-foreground">{user.name ?? user.email}</span>
         <Button variant="ghost" size="sm" onClick={handleSignOut}>
           Sign out
