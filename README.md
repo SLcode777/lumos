@@ -165,55 +165,83 @@ CI uses its own service-container Postgres seeded from `db-test/fixtures/*.sql` 
 
 ## Self-host with Docker Compose
 
-The fastest way to get a working Lumos instance on your own infrastructure.
+Two install paths depending on what you want to do.
 
-### Prerequisites
+### Quick start — just use it
 
-- Docker and Docker Compose installed
-- One or more PostgreSQL databases you want to browse — these stay where they are, Lumos just connects to them (Lumos manages its own internal database via Docker Compose — see "What's running" below)
-- Roughly 1GB of free disk for the image + Postgres data volume
-
-### Quick start
+You only need Docker and Docker Compose. No source clone, no build.
 
 ```bash
-# Clone the repo and create your env
-git clone https://github.com/SLcode777/lumos.git
-cd lumos
-cp .env.example .env
+# Drop the production compose file in any directory you like
+mkdir lumos && cd lumos
+curl -O https://raw.githubusercontent.com/SLcode777/lumos/master/docker-compose.prod.yml
 
-# Generate the two required secrets
-echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)" >> .env
-echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" >> .env
-# Set BETTER_AUTH_URL to your public URL (or leave http://localhost:3000 for local trial)
+# Generate the two required secrets and write your .env
+cat > .env <<EOF
+BETTER_AUTH_SECRET=$(openssl rand -base64 32)
+ENCRYPTION_KEY=$(openssl rand -base64 32)
+BETTER_AUTH_URL=http://localhost:3000
+REGISTRATION_MODE=invite-only
+EOF
 
-# Build + run
-docker compose up -d --build
+# Pull the image and start
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 Lumos is now reachable at [http://localhost:3000](http://localhost:3000). The first user to sign up becomes the admin.
 
-### What's running
+To **pin a specific version** rather than tracking `latest`, set `LUMOS_TAG` in your `.env`:
 
-| Container | Purpose |
-|---|---|
-| `lumos-app` | The Next.js application (stores users, sessions, encrypted connection strings in an embedded SQLite file at `/data/lumos.db`) |
+```bash
+echo "LUMOS_TAG=v0.1.0" >> .env
+docker compose -f docker-compose.prod.yml up -d
+```
 
-Database migrations run automatically on every `docker compose up`. The SQLite database file persists in a named volume (`lumos-data`) — `docker compose down` keeps it; `docker compose down -v` wipes it. **Backups are trivial**: `docker cp lumos-app:/data/lumos.db ./backup-$(date +%F).db`.
+Browse [releases](https://github.com/SLcode777/lumos/pkgs/container/lumos) to see available tags.
+
+### Updating
+
+```bash
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Database migrations run automatically on container start. **Never lose `ENCRYPTION_KEY`** — rotating it requires re-encrypting every stored connection string.
 
 ### Production deployment
 
 When hosting Lumos beyond `localhost`, set `BETTER_AUTH_URL` in `.env` to the public URL your team uses (e.g. `https://lumos.acme.com`). Better Auth uses it to generate OAuth callbacks and secure cookies — wrong value breaks sign-in.
 
-For HTTPS: uncomment the `caddy` service in `docker-compose.yml`, copy `Caddyfile.example` → `Caddyfile`, customize the domain. Caddy provisions a Let's Encrypt cert automatically on first request, assuming your domain points at the host on ports 80 + 443.
+For HTTPS: uncomment the `caddy` service in `docker-compose.prod.yml`, create a `Caddyfile` next to it, customize the domain. Caddy provisions a Let's Encrypt cert automatically on first request, assuming your domain points at the host on ports 80 + 443.
 
-### Updating
+### What's running
+
+| Container | Purpose |
+|---|---|
+| `lumos-app` | The Next.js application. SQLite DB lives in the `lumos-data` named volume — `docker compose down` keeps it; `docker compose down -v` wipes it. |
+
+**Backups** are trivial: `docker cp lumos-app:/data/lumos.db ./backup-$(date +%F).db`.
+
+---
+
+### Contribute — build from source
+
+This path is for contributors. You'll need the full repo, Node.js, pnpm, and Docker.
 
 ```bash
-git pull
+git clone https://github.com/SLcode777/lumos.git
+cd lumos
+cp .env.example .env
+
+# Generate secrets
+echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)" >> .env
+echo "ENCRYPTION_KEY=$(openssl rand -base64 32)" >> .env
+
+# Build the image locally and run
 docker compose up -d --build
 ```
 
-The entrypoint applies any new migrations on the next boot. **Never lose `ENCRYPTION_KEY`**: rotating it requires re-encrypting every stored connection string.
+This uses `docker-compose.yml` (not `.prod.yml`) — it builds the image from the local `Dockerfile` on every `up`.
 
 
 ## Roadmap

@@ -1,20 +1,17 @@
-# docker-compose.yml — for contributors building from source.
+# Lumos — production / end-user install.
 #
-# This compose builds the image locally from the Dockerfile in this repo
-# (`build: .`). It's the right choice if you've cloned the repo and want
-# to test changes — `docker compose up -d --build` rebuilds on every up.
+# Pulls a pre-built image from GHCR (ghcr.io/slcode777/lumos). No source
+# clone, no local build. Pair this file with a .env containing the two
+# required secrets and run `docker compose up -d`.
 #
-# End users: use docker-compose.prod.yml instead, which pulls the pre-built
-# image from GHCR (ghcr.io/slcode777/lumos) without needing the source code.
+# Contributors who want to build from source: use docker-compose.yml instead.
+
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/slcode777/lumos:${LUMOS_TAG:-latest}
     container_name: lumos-app
     restart: unless-stopped
     environment:
-      # SQLite file path inside the container, persisted via the lumos-data volume.
       DATABASE_URL: file:/data/lumos.db
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
@@ -25,13 +22,6 @@ services:
       - lumos-data:/data
     ports:
       - "${APP_PORT:-3000}:3000"
-    # Makes `host.docker.internal` resolve to the host's IP from inside the
-    # container. Native on Docker Desktop (Mac/Windows); on Linux it requires
-    # this explicit mapping. Lets users connect to a Postgres running on the
-    # host (e.g. the bundled db-demo container on port 5434) without hard-
-    # coding host IPs.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   # ────────────────────────────────────────────────────────────────────────────
   # Optional reverse-proxy for HTTPS in front of the app.
