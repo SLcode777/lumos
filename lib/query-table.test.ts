@@ -66,3 +66,62 @@ describe("queryTableRows orderBy clause", () => {
     expect(captured.sql).toMatch(/ORDER BY .* LIMIT \$1 OFFSET \$2$/)
   })
 })
+
+describe("queryRowByPk", () => {
+  it("builds a parameterized WHERE on the PK column", async () => {
+    const captured: { sql?: string; params?: unknown[] } = {}
+    const fakePool = {
+      query: (sql: string, params: unknown[]) => {
+        captured.sql = sql
+        captured.params = params
+        return Promise.resolve({ rows: [{ id: "x", name: "foo" }] })
+      },
+    } as unknown as import("pg").Pool
+
+    const { queryRowByPk } = await import("@/lib/query-table")
+    const result = await queryRowByPk(fakePool, {
+      pgSchema: "public",
+      table: "shops",
+      pkColumn: "id",
+      value: "abc-123",
+    })
+
+    expect(result).toEqual({ id: "x", name: "foo" })
+    expect(captured.sql).toContain(`FROM "public"."shops"`)
+    expect(captured.sql).toContain(`WHERE "id" = $1 LIMIT 1`)
+    expect(captured.params).toEqual(["abc-123"])
+  })
+
+  it("returns null when the row does not exist", async () => {
+    const fakePool = {
+      query: () => Promise.resolve({ rows: [] }),
+    } as unknown as import("pg").Pool
+    const { queryRowByPk } = await import("@/lib/query-table")
+    const result = await queryRowByPk(fakePool, {
+      pgSchema: "public",
+      table: "shops",
+      pkColumn: "id",
+      value: "missing",
+    })
+    expect(result).toBeNull()
+  })
+
+  it("escapes identifiers (schema, table, pkColumn)", async () => {
+    const captured: { sql?: string } = {}
+    const fakePool = {
+      query: (sql: string) => {
+        captured.sql = sql
+        return Promise.resolve({ rows: [] })
+      },
+    } as unknown as import("pg").Pool
+    const { queryRowByPk } = await import("@/lib/query-table")
+    await queryRowByPk(fakePool, {
+      pgSchema: `weird"schema`,
+      table: `wei"rd_table`,
+      pkColumn: `we"ird_id`,
+      value: "x",
+    })
+    expect(captured.sql).toContain(`"weird""schema"."wei""rd_table"`)
+    expect(captured.sql).toContain(`"we""ird_id" = $1`)
+  })
+})

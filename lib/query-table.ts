@@ -37,7 +37,7 @@ export async function queryTableRows(pool: Pool, params: QueryTableRowsParams): 
     ? ` ORDER BY ${escapeIdentifier(orderBy.column)} ${orderBy.direction === "desc" ? "DESC" : "ASC"}`
     : ""
 
-  const sql = `SELECT * FROM ${escapeIdentifier(pgSchema)}.${escapeIdentifier(table)}${orderClause} LIMIT $1 OFFSET $2`  
+  const sql = `SELECT * FROM ${escapeIdentifier(pgSchema)}.${escapeIdentifier(table)}${orderClause} LIMIT $1 OFFSET $2`
   const offset = (page - 1) * pageSize
 
   const result = await pool.query<Record<string, unknown>>(sql, [pageSize, offset])
@@ -57,4 +57,35 @@ export function escapeIdentifier(name: string): string {
     throw new Error("Identifier contains a NUL byte, which is forbidden in Postgres")
   }
   return `"${name.replace(/"/g, '""')}"`
+}
+
+export type QueryRowByPkParams = {
+  pgSchema: string
+  table: string
+  /** Single PK column name. Composite PKs not supported (caller must fall back). */
+  pkColumn: string
+  /** Raw PK value (string from URL — PG coerces per the column's actual type). */
+  value: string
+}
+
+/**
+ * Fetches a single row by primary key. Used by the panel-data pipeline so the
+ * row detail panel can render any row, not just one already on the current page.
+ *
+ * Returns null when no row matches. Errors propagate — caller logs and falls
+ * back to closed panel.
+ *
+ * Composite PKs are intentionally not supported here. Callers should detect
+ * the `$`-prefixed encoding from `encodeRowParam` and route through the
+ * in-page `findRowByParam` fallback instead.
+ */
+export async function queryRowByPk(
+  pool: import("pg").Pool,
+  { pgSchema, table, pkColumn, value }: QueryRowByPkParams
+): Promise<Record<string, unknown> | null> {
+  const sql =
+    `SELECT * FROM ${escapeIdentifier(pgSchema)}.${escapeIdentifier(table)} ` +
+    `WHERE ${escapeIdentifier(pkColumn)} = $1 LIMIT 1`
+  const result = await pool.query<Record<string, unknown>>(sql, [value])
+  return result.rows[0] ?? null
 }

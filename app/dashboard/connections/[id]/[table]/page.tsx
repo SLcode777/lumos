@@ -6,7 +6,7 @@ import { getSession } from "@/lib/get-session"
 import { loadConnection } from "@/lib/load-connection"
 import { loadSchema } from "@/lib/load-schema"
 import { getConnectionPool } from "@/lib/pool-manager"
-import { queryTableRows } from "@/lib/query-table"
+import { queryRowByPk, queryTableRows } from "@/lib/query-table"
 
 import { PaginationControls } from "./pagination-controls"
 import { buildFkIndex } from "@/lib/fk-index"
@@ -16,11 +16,18 @@ import { TableToolbar } from "./table-toolbar"
 import { stringifyForTitle } from "@/lib/cell-format"
 import { encodeRowParam, findRowByParam } from "@/lib/row-id"
 import { Cell } from "./cell"
-import { RowDetailPanel } from "./row-detail-panel"
+import { RowDetailPanel, type PanelData } from "./row-detail-panel"
 import { parseSortParams, SortState } from "@/lib/sort"
-import { ColumnInfo } from "@/lib/introspect"
-import { lookupFkLabel, resolveForeignKeyLabels } from "@/lib/resolve-fks"
-import { countInverseRelationsForPage, inverseCountKey } from "@/lib/inverse-relations"
+import { ColumnInfo, type DatabaseSchema, type TableInfo } from "@/lib/introspect"
+import { type FkLabels, lookupFkLabel, resolveForeignKeyLabels } from "@/lib/resolve-fks"
+import {
+  countInverseRelationsForPage,
+  humanizeTableName,
+  inverseCountKey,
+  type PageInverseRelations,
+} from "@/lib/inverse-relations"
+import { buildPanelCloseHref, buildPanelHref, parsePanelParams } from "@/lib/panel-href"
+import type { Pool } from "pg"
 
 const PAGE_SIZES = [25, 50, 100] as const
 const DEFAULT_PAGE_SIZE = 50
@@ -127,46 +134,33 @@ export default async function TableViewPage({
 
   const sortHrefs = buildSortHrefs(baseHref, sp, sort, tableInfo.columns)
 
-  const persistentQuery = persistentParams.toString()
-  const closeHref = persistentQuery ? `${baseHref}?${persistentQuery}` : baseHref
+  const closeHref = buildPanelCloseHref(baseHref, persistentParams)
 
-  const rowHrefs = rows.map((row, i) => {
-    const params = new URLSearchParams(persistentParams)
-    params.set("row", encodeRowParam(row, tableInfo.primaryKey, i))
-    return `${baseHref}?${params.toString()}`
-  })
+  const rowHrefs = rows.map((row, i) =>
+    buildPanelHref(baseHref, persistentParams, {
+      mode: "row",
+      panelTable: tableInfo.name,
+      panelRow: encodeRowParam(row, tableInfo.primaryKey, i),
+    })
+  )
 
-  // Resolve the active row from the URL, then build the panel's data shape.
-  const rowParam = typeof sp.row === "string" ? sp.row : null
-  const found = rowParam !== null ? findRowByParam(rows, tableInfo.primaryKey, rowParam) : null
-
-  const panelData = found
-    ? {
-        title: stringifyForTitle(found.row[primary.name]),
-        subtitle: `Row ${found.index + 1} of ${rows.length}`,
-        fields: tableInfo.columns.map((col) => {
-          const fkInfo = fkIndex.get(col.name)
-          return {
-            column: col,
-            isFk: Boolean(fkInfo),
-            content: (
-              <Cell
-                value={found.row[col.name]}
-                column={col}
-                mode="full"
-                fkLabel={lookupFkLabel(fkLabels, fkInfo, found.row[col.name])}
-              />
-            ),
-          }
-        }),
-        inverseRelations: pageInverseRelations.meta.map((m) => ({
-          meta: m,
-          count: pageInverseRelations.counts.get(inverseCountKey(String(found.row[tableInfo.primaryKey[0]]), m)) ?? 0,
-        })),
-        prevHref: found.index > 0 ? rowHrefs[found.index - 1] : null,
-        nextHref: found.index < rows.length - 1 ? rowHrefs[found.index + 1] : null,
-      }
-    : null
+  // Parse panel state from the URL — orthogonal to the route. When `panel=row`,
+  // we run a fresh fetch pipeline (queryRowByPk + FK resolve + inverse counts)
+  // for the target row so the panel works for any row, not just one on the
+  // current page. The page-level batches above stay scoped to the row cards.
+  const panelState = parsePanelParams(sp)
+  const panelData =
+    panelState?.mode === "row"
+      ? await buildRowPanelData({
+          pool,
+          schema,
+          panelTable: panelState.panelTable,
+          panelRow: panelState.panelRow,
+          currentTable: tableInfo,
+          currentRows: rows,
+          currentRowHrefs: rowHrefs,
+        })
+      : null
 
   return (
     <div className="flex h-full flex-col">
@@ -186,7 +180,11 @@ export default async function TableViewPage({
         />
       )}
       <PaginationControls page={page} pageSize={pageSize} totalPages={totalPages} totalEstimate={totalEstimate} />
-      <RowDetailPanel data={panelData} closeHref={closeHref} tableName={decodedTable} />
+      <RowDetailPanel
+        data={panelData}
+        closeHref={closeHref}
+        tableName={panelState?.panelTable ?? decodedTable}
+      />
     </div>
   )
 }
@@ -261,5 +259,150 @@ function buildSortHrefs(
     perColumn,
     clear: buildHref(null, null),
     flip,
+  }
+}
+
+type BuildRowPanelDataParams = {
+  pool: Pool
+  schema: DatabaseSchema
+  /** Table the panel is displaying — may differ from currentTable. */
+  panelTable: string
+  /** PK value from the URL (already string-encoded). */
+  panelRow: string
+  /** The current route's table — used to compute prev/next when the panel row is on the visible page. */
+  currentTable: TableInfo
+  /** The current page's rows — same use as above. */
+  currentRows: Record<string, unknown>[]
+  /** Pre-built hrefs for prev/next when the panel row is on the visible page. */
+  currentRowHrefs: string[]
+}
+
+/**
+ * Builds the data shape consumed by `<RowDetailPanel>` for `?panel=row`.
+ *
+ * Independent of the page-level batches (`rows`, `fkLabels`, `pageInverseRelations`):
+ * fetches the target row, its forward-FK labels, and its inverse counts fresh.
+ * This is what unlocks cross-table panels and deep-linked rows (#33, #40).
+ *
+ * Single-column PK only for the fresh fetch path. Composite PKs (`$<json>`) and
+ * index encodings (`#<index>`) fall back to looking up the row in the current
+ * page's rows — same behavior as pre-refactor for those edge cases.
+ */
+async function buildRowPanelData({
+  pool,
+  schema,
+  panelTable,
+  panelRow,
+  currentTable,
+  currentRows,
+  currentRowHrefs,
+}: BuildRowPanelDataParams): Promise<PanelData | null> {
+  const target = schema.tables.find((t) => t.name === panelTable)
+  if (!target) return null
+
+  // ── Resolve the row ───────────────────────────────────────────────────
+  let row: Record<string, unknown> | null = null
+  let indexInPage = -1 // -1 = not in the current page (no prev/next)
+
+  const isComposite = panelRow.startsWith("$")
+  const isIndex = panelRow.startsWith("#")
+
+  if (!isComposite && !isIndex && target.primaryKey.length === 1) {
+    try {
+      row = await queryRowByPk(pool, {
+        pgSchema: target.schema,
+        table: target.name,
+        pkColumn: target.primaryKey[0],
+        value: panelRow,
+      })
+    } catch (err) {
+      console.error("[panel] queryRowByPk failed:", err instanceof Error ? err.message : err)
+      return null
+    }
+    // Same-table case: locate it in the current page so we can wire prev/next.
+    if (row && target.schema === currentTable.schema && target.name === currentTable.name) {
+      const idx = currentRows.findIndex((r) => String(r[target.primaryKey[0]]) === panelRow)
+      if (idx >= 0) indexInPage = idx
+    }
+  } else if (target.schema === currentTable.schema && target.name === currentTable.name) {
+    // Composite / index fallback — only works if the row is on the current page.
+    const found = findRowByParam(currentRows, currentTable.primaryKey, panelRow)
+    if (found) {
+      row = found.row
+      indexInPage = found.index
+    }
+  }
+
+  if (!row) return null
+
+  // ── Forward FK labels for THIS row (one-row batch) ────────────────────
+  let panelFkLabels: FkLabels = new Map()
+  try {
+    panelFkLabels = await resolveForeignKeyLabels({
+      pool,
+      schema,
+      fromTable: target,
+      rows: [row],
+    })
+  } catch (err) {
+    console.error("[panel] resolveForeignKeyLabels failed:", err instanceof Error ? err.message : err)
+    // Degraded: raw values render. Panel still opens.
+  }
+
+  // ── Inverse-relation counts for THIS row (one-row batch) ──────────────
+  let panelInverse: PageInverseRelations = { meta: [], counts: new Map() }
+  try {
+    panelInverse = await countInverseRelationsForPage({
+      pool,
+      schema,
+      currentTable: target,
+      rows: [row],
+    })
+  } catch (err) {
+    console.error(
+      "[panel] countInverseRelationsForPage failed:",
+      err instanceof Error ? err.message : err
+    )
+    // Degraded: no inverse cards. Panel still opens.
+  }
+
+  // ── Build the panel shape ─────────────────────────────────────────────
+  const targetPrimary = pickPrimaryField(target.columns, target.primaryKey)
+  const targetFkIndex = buildFkIndex(schema.foreignKeys, target.schema, target.name)
+  const targetPkCol = target.primaryKey[0]
+
+  return {
+    title: stringifyForTitle(row[targetPrimary.name]),
+    subtitle:
+      indexInPage === -1
+        ? humanizeTableName(target.name)
+        : `Row ${indexInPage + 1} of ${currentRows.length}`,
+    fields: target.columns.map((col) => {
+      const fkInfo = targetFkIndex.get(col.name)
+      const value = row[col.name]
+      return {
+        column: col,
+        isFk: Boolean(fkInfo),
+        content: (
+          <Cell
+            value={value}
+            column={col}
+            mode="full"
+            fkLabel={lookupFkLabel(panelFkLabels, fkInfo, value)}
+          />
+        ),
+      }
+    }),
+    inverseRelations: panelInverse.meta.map((m) => ({
+      meta: m,
+      count: targetPkCol
+        ? panelInverse.counts.get(inverseCountKey(String(row[targetPkCol]), m)) ?? 0
+        : 0,
+    })),
+    prevHref: indexInPage > 0 ? currentRowHrefs[indexInPage - 1] : null,
+    nextHref:
+      indexInPage >= 0 && indexInPage < currentRowHrefs.length - 1
+        ? currentRowHrefs[indexInPage + 1]
+        : null,
   }
 }

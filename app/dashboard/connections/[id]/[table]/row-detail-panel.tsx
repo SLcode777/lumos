@@ -12,7 +12,7 @@ import { getTableIcon } from "@/lib/table-icon"
 import { cn } from "@/lib/utils"
 import { humanizeTableName, InverseRelationMeta, pluralizeRecord } from "@/lib/inverse-relations"
 
-type PanelData = {
+export type PanelData = {
   title: string
   subtitle: string
   /**
