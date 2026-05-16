@@ -66,7 +66,7 @@ export function looksLikeUrl(value: string): boolean {
 const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|avif|svg)$/i
 
 const IMAGE_HOST_REGEX =
-  /(?:^|\.)(?:githubusercontent\.com|gravatar\.com|imgur\.com|googleusercontent\.com|twimg\.com|fbcdn\.net|cdninstagram\.com|cloudinary\.com|imagedelivery\.net|imagekit\.io|picsum\.photos)$/i
+  /(?:^|\.)(?:githubusercontent\.com|gravatar\.com|imgur\.com|googleusercontent\.com|twimg\.com|fbcdn\.net|cdninstagram\.com|cloudinary\.com|imagedelivery\.net|imagekit\.io|picsum\.photos|pravatar\.cc)$/i
 
 export function looksLikeImageUrl(value: string): boolean {
   if (!looksLikeUrl(value)) return false

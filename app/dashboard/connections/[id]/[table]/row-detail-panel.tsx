@@ -17,11 +17,14 @@ export type PanelData = {
   subtitle: string
   /**
    * `isFk` drives the violet styling and the Link2 icon on each field card —
-   * mirrors the chip styling in record-cards.tsx. When the future "humanized
-   * FK" issue lands, this flag will also gate making the value clickable
-   * (navigate to the target row's detail view).
+   * mirrors the chip styling in record-cards.tsx.
+   *
+   * `fkHref` is pre-built server-side (#40). Non-null when the column is a
+   * hit FK on a single-column relation → the field card is rendered as a
+   * Link navigating to the target row's detail panel. Null otherwise (raw
+   * value, orphan, null, composite) → card stays as a visual-only `<div>`.
    */
-  fields: { column: ColumnInfo; content: React.ReactNode; isFk: boolean }[]
+  fields: { column: ColumnInfo; content: React.ReactNode; isFk: boolean; fkHref: string | null }[]
   /**
    * `href` is pre-built server-side. Non-null when count > 0 → the card is
    * rendered as a Link to the related sub-panel (mode `related`). Null when
@@ -150,27 +153,47 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto bg-muted/30 px-6 py-5">
-              {stableData.fields.map(({ column, content, isFk }) => (
-                <div
-                  key={column.name}
-                  className={cn(
-                    "rounded-xl border bg-card p-4 shadow-sm ring-1 ring-foreground/5",
-                    isFk &&
-                      "border-violet-200 bg-violet-50/60 ring-violet-200/40 dark:border-violet-900 dark:bg-violet-950/30 dark:ring-violet-900/30"
-                  )}
-                >
-                  <p
-                    className={cn(
-                      "mb-1 flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase",
-                      isFk ? "text-violet-700 dark:text-violet-300" : "text-muted-foreground"
-                    )}
-                  >
-                    {isFk && <Link2 className="h-3 w-3" aria-hidden />}
-                    {column.name}
-                  </p>
-                  <div className="text-sm">{content}</div>
-                </div>
-              ))}
+              {stableData.fields.map(({ column, content, isFk, fkHref }) => {
+                // Body is the same regardless of clickability — only the
+                // wrapping element (Link vs div) and a hover state differ.
+                const cardBody = (
+                  <>
+                    <p
+                      className={cn(
+                        "mb-1 flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase",
+                        isFk ? "text-violet-700 dark:text-violet-300" : "text-muted-foreground"
+                      )}
+                    >
+                      {isFk && <Link2 className="h-3 w-3" aria-hidden />}
+                      {column.name}
+                    </p>
+                    <div className="text-sm">{content}</div>
+                  </>
+                )
+
+                const classes = cn(
+                  "block rounded-xl border bg-card p-4 shadow-sm ring-1 ring-foreground/5",
+                  isFk &&
+                    "border-violet-200 bg-violet-50/60 ring-violet-200/40 dark:border-violet-900 dark:bg-violet-950/30 dark:ring-violet-900/30",
+                  fkHref &&
+                    "cursor-pointer transition hover:border-violet-300 hover:bg-violet-100/80 dark:hover:border-violet-800 dark:hover:bg-violet-950/50"
+                )
+
+                // No ClickableCard parent here (the panel is in its own Sheet),
+                // so the Link doesn't need the pointer-events trick. Simple wrap.
+                if (fkHref) {
+                  return (
+                    <Link key={column.name} href={fkHref} scroll={false} className={classes}>
+                      {cardBody}
+                    </Link>
+                  )
+                }
+                return (
+                  <div key={column.name} className={classes}>
+                    {cardBody}
+                  </div>
+                )
+              })}
               {stableData.inverseRelations.map(({ meta, count, href }) => (
                 <InverseRelationCard
                   key={`${meta.sourceSchema}.${meta.sourceTable}.${meta.fromColumn}`}
@@ -187,15 +210,7 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
   )
 }
 
-function InverseRelationCard({
-  meta,
-  count,
-  href,
-}: {
-  meta: InverseRelationMeta
-  count: number
-  href: string | null
-}) {
+function InverseRelationCard({ meta, count, href }: { meta: InverseRelationMeta; count: number; href: string | null }) {
   const empty = count === 0
   const cardBody = (
     <>

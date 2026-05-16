@@ -15,8 +15,15 @@ export type RelatedRecordCardData = {
   key: string
   /** Title shown on the card (the primary field's value, already stringified). */
   title: string
-  /** Pre-rendered field chips (column meta + Cell-rendered content). */
-  fields: { column: ColumnInfo; isFk: boolean; content: React.ReactNode }[]
+  /**
+   * Pre-rendered field chips (column meta + Cell-rendered content).
+   *
+   * `fkHref` is pre-built server-side (#40). Non-null when the column is a
+   * hit FK on a single-column relation → the chip is rendered as a Link to
+   * the target row's detail panel on the CURRENT route. Null otherwise →
+   * chip stays as a visual-only `<div>`.
+   */
+  fields: { column: ColumnInfo; isFk: boolean; content: React.ReactNode; fkHref: string | null }[]
   /** Number of fields hidden under "+N more fields". */
   hiddenCount: number
   /** Where clicking the card navigates — pre-built via buildPanelHref (mode: "row"). */
@@ -129,8 +136,8 @@ export function RelatedRecordsSubPanel({ data, closeHref }: Props) {
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      {card.fields.map(({ column, content, isFk }) => (
-                        <FieldChip key={column.name} column={column} isFk={isFk}>
+                      {card.fields.map(({ column, content, isFk, fkHref }) => (
+                        <FieldChip key={column.name} column={column} isFk={isFk} fkHref={fkHref}>
                           {content}
                         </FieldChip>
                       ))}
@@ -155,16 +162,40 @@ export function RelatedRecordsSubPanel({ data, closeHref }: Props) {
   )
 }
 
-function FieldChip({ column, isFk, children }: { column: ColumnInfo; isFk: boolean; children: React.ReactNode }) {
-  return (
-    <div
-      className={
-        "rounded-md border bg-card p-2 " +
-        (isFk ? "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30" : "")
-      }
-    >
+function FieldChip({
+  column,
+  isFk,
+  fkHref,
+  children,
+}: {
+  column: ColumnInfo
+  isFk: boolean
+  fkHref: string | null
+  children: React.ReactNode
+}) {
+  const chipBody = (
+    <>
       <p className="truncate text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{column.name}</p>
       <div className="mt-1 truncate text-sm">{children}</div>
-    </div>
+    </>
   )
+
+  const classes =
+    "block rounded-md border bg-card p-2 " +
+    (isFk ? "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30 " : "") +
+    (fkHref
+      ? "transition hover:border-violet-300 hover:bg-violet-100/80 dark:hover:border-violet-800 dark:hover:bg-violet-950/50"
+      : "")
+
+  // The parent card's overlay Link is pointer-events-auto, the children zone
+  // is pointer-events-none with `[&_a]:pointer-events-auto` — this nested <a>
+  // intercepts clicks before the card-level Link, routing to the FK target.
+  if (fkHref) {
+    return (
+      <Link href={fkHref} scroll={false} className={classes} aria-label={`Open ${column.name} target`}>
+        {chipBody}
+      </Link>
+    )
+  }
+  return <div className={classes}>{chipBody}</div>
 }

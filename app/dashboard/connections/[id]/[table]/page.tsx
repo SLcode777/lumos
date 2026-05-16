@@ -19,7 +19,7 @@ import { Cell } from "./cell"
 import { RowDetailPanel, type PanelData } from "./row-detail-panel"
 import { parseSortParams, SortState } from "@/lib/sort"
 import { ColumnInfo, type DatabaseSchema, type TableInfo } from "@/lib/introspect"
-import { type FkLabels, lookupFkLabel, resolveForeignKeyLabels } from "@/lib/resolve-fks"
+import { fkLabelKey, type FkLabels, lookupFkLabel, resolveForeignKeyLabels } from "@/lib/resolve-fks"
 import {
   countInverseRelationsForPage,
   fetchRelatedRows,
@@ -180,6 +180,36 @@ export default async function TableViewPage({
     }
   }
 
+  // Pre-compute hrefs for forward FK badges on the row cards. Keyed by
+  // `${targetSchema}.${targetTable}.${stringifiedValue}` — same shape as
+  // fkLabelKey. Missing key → either null value, orphan, or composite FK
+  // (#30 skipped those); the chip stays inert.
+  //
+  // The href targets the FK's destination table via panel=row. The route stays
+  // the current one — chained nav lives entirely in URL params (cf. #41).
+  const fkHrefs = new Map<string, string>()
+  for (const row of rows) {
+    for (const fk of schema.foreignKeys) {
+      // Single-column source + single-column target only — same constraint as #30.
+      if (fk.fromSchema !== tableInfo.schema || fk.fromTable !== tableInfo.name) continue
+      if (fk.fromColumns.length !== 1 || fk.toColumns.length !== 1) continue
+      const value = row[fk.fromColumns[0]]
+      if (value === null || value === undefined) continue
+      const slot = lookupFkLabel(fkLabels, fk, value)
+      // Only render a clickable badge when we have a confirmed hit. Orphan
+      // (kind: "missing") and undefined (no FK or composite) stay inert.
+      if (slot?.kind !== "hit") continue
+      fkHrefs.set(
+        fkLabelKey(fk.toSchema, fk.toTable, value),
+        buildPanelHref(baseHref, persistentParams, {
+          mode: "row",
+          panelTable: fk.toTable,
+          panelRow: String(value),
+        })
+      )
+    }
+  }
+
   // Parse panel state from the URL — orthogonal to the route. Two modes are
   // wired up: `row` (single-row detail, fresh fetch via buildRowPanelData) and
   // `related` (drill-down list, fresh fetch via buildRelatedPanelData). The
@@ -205,7 +235,6 @@ export default async function TableViewPage({
       pool,
       schema,
       panelState,
-      pageInverseRelationsMeta: pageInverseRelations.meta,
       baseHref,
       persistentParams,
     })
@@ -227,14 +256,11 @@ export default async function TableViewPage({
           pageInverseRelations={pageInverseRelations}
           rowHrefs={rowHrefs}
           inverseHrefs={inverseHrefs}
+          fkHrefs={fkHrefs}
         />
       )}
       <PaginationControls page={page} pageSize={pageSize} totalPages={totalPages} totalEstimate={totalEstimate} />
-      <RowDetailPanel
-        data={panelData}
-        closeHref={closeHref}
-        tableName={panelState?.panelTable ?? decodedTable}
-      />
+      <RowDetailPanel data={panelData} closeHref={closeHref} tableName={panelState?.panelTable ?? decodedTable} />
       <RelatedRecordsSubPanel data={relatedData} closeHref={closeHref} />
     </div>
   )
@@ -272,7 +298,7 @@ function buildSortHrefs(
   baseHref: string,
   sp: { [key: string]: string | string[] | undefined },
   current: SortState | null,
-  columns: ColumnInfo[],
+  columns: ColumnInfo[]
 ): { perColumn: Record<string, string>; clear: string; flip: string | null } {
   function buildHref(nextSort: string | null, nextOrder: "asc" | "desc" | null): string {
     const params = new URLSearchParams()
@@ -416,10 +442,7 @@ async function buildRowPanelData({
       rows: [row],
     })
   } catch (err) {
-    console.error(
-      "[panel] countInverseRelationsForPage failed:",
-      err instanceof Error ? err.message : err
-    )
+    console.error("[panel] countInverseRelationsForPage failed:", err instanceof Error ? err.message : err)
     // Degraded: no inverse cards. Panel still opens.
   }
 
@@ -430,30 +453,38 @@ async function buildRowPanelData({
 
   return {
     title: stringifyForTitle(row[targetPrimary.name]),
-    subtitle:
-      indexInPage === -1
-        ? humanizeTableName(target.name)
-        : `Row ${indexInPage + 1} of ${currentRows.length}`,
+    subtitle: indexInPage === -1 ? humanizeTableName(target.name) : `Row ${indexInPage + 1} of ${currentRows.length}`,
     fields: target.columns.map((col) => {
       const fkInfo = targetFkIndex.get(col.name)
       const value = row[col.name]
+      // Resolve the FK label slot ONCE — we reuse it both for the Cell content
+      // and for deciding whether the field card should be clickable below.
+      const slot = lookupFkLabel(panelFkLabels, fkInfo, value)
+      // Pre-build the click-through href when this is a hit FK on a single-column
+      // FK relation. Orphan (missing) and composite FKs stay inert — same rules
+      // as the row card FieldChip in record-cards.tsx (#30 + #40).
+      const fkHref =
+        slot?.kind === "hit" &&
+        fkInfo &&
+        fkInfo.fromColumns.length === 1 &&
+        fkInfo.toColumns.length === 1 &&
+        value !== null &&
+        value !== undefined
+          ? buildPanelHref(baseHref, persistentParams, {
+              mode: "row",
+              panelTable: fkInfo.toTable,
+              panelRow: String(value),
+            })
+          : null
       return {
         column: col,
         isFk: Boolean(fkInfo),
-        content: (
-          <Cell
-            value={value}
-            column={col}
-            mode="full"
-            fkLabel={lookupFkLabel(panelFkLabels, fkInfo, value)}
-          />
-        ),
+        fkHref,
+        content: <Cell value={value} column={col} mode="full" fkLabel={slot} />,
       }
     }),
     inverseRelations: panelInverse.meta.map((m) => {
-      const count = targetPkCol
-        ? panelInverse.counts.get(inverseCountKey(String(row[targetPkCol]), m)) ?? 0
-        : 0
+      const count = targetPkCol ? (panelInverse.counts.get(inverseCountKey(String(row[targetPkCol]), m)) ?? 0) : 0
       // Pre-build the sub-panel href so the client component stays dumb.
       // Empty relations (count=0) stay inert — render as <div>, not <Link>.
       // The sub-panel's Back button uses router.back() to return here, so we
@@ -470,10 +501,7 @@ async function buildRowPanelData({
       return { meta: m, count, href }
     }),
     prevHref: indexInPage > 0 ? currentRowHrefs[indexInPage - 1] : null,
-    nextHref:
-      indexInPage >= 0 && indexInPage < currentRowHrefs.length - 1
-        ? currentRowHrefs[indexInPage + 1]
-        : null,
+    nextHref: indexInPage >= 0 && indexInPage < currentRowHrefs.length - 1 ? currentRowHrefs[indexInPage + 1] : null,
   }
 }
 
@@ -484,8 +512,6 @@ type BuildRelatedPanelDataParams = {
   schema: DatabaseSchema
   /** Already typed `mode: "related"` by the parsePanelParams discriminant. */
   panelState: Extract<PanelState, { mode: "related" }>
-  /** Inverse-FK meta list for the current route's table — used to validate the (panelTable, panelFk) pair. */
-  pageInverseRelationsMeta: InverseRelationMeta[]
   /** Current route base href — card hrefs use this so the chained nav stays on the route. */
   baseHref: string
   /** Pagination/sort params preserved when switching the panel mode. */
@@ -510,21 +536,37 @@ async function buildRelatedPanelData({
   pool,
   schema,
   panelState,
-  pageInverseRelationsMeta,
   baseHref,
   persistentParams,
 }: BuildRelatedPanelDataParams): Promise<RelatedRecordsSubPanelData | null> {
-  // Validate: the (panelTable, panelFk) pair must match one of the current
-  // table's eligible inverse FKs. Otherwise the URL is stale or hand-crafted.
-  const meta = pageInverseRelationsMeta.find(
-    (m) => m.sourceTable === panelState.panelTable && m.fromColumn === panelState.panelFk
+  // Validate: the (panelTable, panelFk) pair must match a real single-column FK
+  // in the introspected schema. We validate globally (not just against the route
+  // table's inverse FKs) because chained navigation through cross-table panels
+  // legitimately drills into FKs of tables OTHER than the route's table.
+  // Example: on /products, opening a shop panel via FK then drilling into the
+  // shop's `products · N` inverse card → panelTable=products, panelFk=shop_id,
+  // which is an FK of products NOT inverse-FK-of-products. Still a valid drill.
+  const fk = schema.foreignKeys.find(
+    (f) =>
+      f.fromTable === panelState.panelTable &&
+      f.fromColumns.length === 1 &&
+      f.toColumns.length === 1 &&
+      f.fromColumns[0] === panelState.panelFk
   )
-  if (!meta) return null
+  if (!fk) return null
+
+  // Build the meta shape that fetchRelatedRows expects. `ambiguous` is a UI
+  // hint only (for the chip caption) and isn't used downstream by the fetcher,
+  // so we set it to false unconditionally here.
+  const meta: InverseRelationMeta = {
+    sourceSchema: fk.fromSchema,
+    sourceTable: fk.fromTable,
+    fromColumn: fk.fromColumns[0],
+    ambiguous: false,
+  }
 
   // Sub-panel sort whitelisted against the SOURCE table's columns (not the route's).
-  const sourceTableInfo = schema.tables.find(
-    (t) => t.schema === meta.sourceSchema && t.name === meta.sourceTable
-  )
+  const sourceTableInfo = schema.tables.find((t) => t.schema === meta.sourceSchema && t.name === meta.sourceTable)
   const sort = sourceTableInfo
     ? parseSortParams(panelState.panelSort, panelState.panelOrder, sourceTableInfo.columns)
     : null
@@ -576,17 +618,29 @@ async function buildRelatedPanelData({
       fields: visibleCols.map((col) => {
         const fkInfo = sourceFkIndex.get(col.name)
         const value = row[col.name]
+        // Same FK-href computation as for the main row cards (#40). The href
+        // stays on the current route (baseHref) — clicking a FK chip inside a
+        // sub-panel card transitions to the target row's detail without
+        // leaving the route. Only built for hit + single-column FK + non-null.
+        const slot = lookupFkLabel(fkLabels, fkInfo, value)
+        const fkHref =
+          slot?.kind === "hit" &&
+          fkInfo &&
+          fkInfo.fromColumns.length === 1 &&
+          fkInfo.toColumns.length === 1 &&
+          value !== null &&
+          value !== undefined
+            ? buildPanelHref(baseHref, persistentParams, {
+                mode: "row",
+                panelTable: fkInfo.toTable,
+                panelRow: String(value),
+              })
+            : null
         return {
           column: col,
           isFk: Boolean(fkInfo),
-          content: (
-            <Cell
-              value={value}
-              column={col}
-              mode="compact"
-              fkLabel={lookupFkLabel(fkLabels, fkInfo, value)}
-            />
-          ),
+          fkHref,
+          content: <Cell value={value} column={col} mode="compact" fkLabel={slot} />,
         }
       }),
     }

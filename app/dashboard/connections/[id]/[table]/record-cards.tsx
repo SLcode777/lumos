@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { Cell } from "./cell"
 import { ClickableCard } from "./clickable-card"
 import { isArrayColumn, looksLikeImageUrl, stringifyForTitle } from "@/lib/cell-format"
-import { FkLabels, lookupFkLabel } from "@/lib/resolve-fks"
+import { fkLabelKey, FkLabels, lookupFkLabel } from "@/lib/resolve-fks"
 import {
   humanizeTableName,
   inverseCountKey,
@@ -35,6 +35,12 @@ type Props = Readonly<{
    * chip stays inert (renders as <div>, not <Link>).
    */
   inverseHrefs: Map<string, string>
+  /**
+   * Pre-built `panel=row` hrefs for forward FK badges. Keyed by
+   * `fkLabelKey(targetSchema, targetTable, value)`. Missing key → badge
+   * stays inert (null/orphan/composite FK).
+   */
+  fkHrefs: Map<string, string>
 }>
 
 export function RecordCards({
@@ -47,6 +53,7 @@ export function RecordCards({
   pageInverseRelations,
   rowHrefs,
   inverseHrefs,
+  fkHrefs,
 }: Props) {
   if (rows.length === 0) {
     return (
@@ -91,6 +98,7 @@ export function RecordCards({
                   value={row[col.name]}
                   fk={fkIndex.get(col.name)}
                   fkLabels={fkLabels}
+                  fkHrefs={fkHrefs}
                 />
               ))}
               {visibleInverse.map((meta) => {
@@ -120,26 +128,29 @@ function FieldChip({
   value,
   fk,
   fkLabels,
+  fkHrefs,
 }: {
   column: ColumnInfo
   value: unknown
   fk: ReturnType<FkIndex["get"]>
   fkLabels: FkLabels
+  fkHrefs: Map<string, string>
 }) {
   const isFk = Boolean(fk)
   const fkLabel = lookupFkLabel(fkLabels, fk, value)
   // Hide the type icon when the cell will render as a thumbnail — the image
   // itself already conveys the column's content type, the "T" is just noise.
-  const isImage =
-    !isFk && !isArrayColumn(column.udtName) && typeof value === "string" && looksLikeImageUrl(value)
+  const isImage = !isFk && !isArrayColumn(column.udtName) && typeof value === "string" && looksLikeImageUrl(value)
 
-  return (
-    <div
-      className={cn(
-        "rounded-md border bg-card p-2",
-        isFk && "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30"
-      )}
-    >
+  // Look up the pre-built FK href (null when value is null, orphan, composite,
+  // or just not an FK column). Drives the Link-vs-div wrapper below.
+  const fkHref =
+    isFk && fk && value !== null && value !== undefined
+      ? (fkHrefs.get(fkLabelKey(fk.toSchema, fk.toTable, value)) ?? null)
+      : null
+
+  const chipBody = (
+    <>
       <p className="truncate text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{column.name}</p>
       <div className="mt-1 flex items-center gap-1.5">
         {!isImage && <TypeIcon column={column} isFk={isFk} />}
@@ -147,19 +158,31 @@ function FieldChip({
           <Cell value={value} column={column} fkLabel={fkLabel} />
         </span>
       </div>
-    </div>
+    </>
   )
+
+  const classes = cn(
+    "block rounded-md border bg-card p-2",
+    isFk && "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30",
+    fkHref &&
+      "transition hover:border-violet-300 hover:bg-violet-100/80 dark:hover:border-violet-800 dark:hover:bg-violet-950/50"
+  )
+
+  // ClickableCard's parent Link sits in z-10 with pointer-events-auto; its
+  // children zone is pointer-events-none with `[&_a]:pointer-events-auto`, so
+  // this nested <a> intercepts the click before the row-card link and routes
+  // to the FK target panel instead of the source row's detail panel.
+  if (fkHref) {
+    return (
+      <Link href={fkHref} scroll={false} className={classes} aria-label={`Open ${fk!.toTable} detail`}>
+        {chipBody}
+      </Link>
+    )
+  }
+  return <div className={classes}>{chipBody}</div>
 }
 
-function InverseRelationChip({
-  meta,
-  count,
-  href,
-}: {
-  meta: InverseRelationMeta
-  count: number
-  href: string | null
-}) {
+function InverseRelationChip({ meta, count, href }: { meta: InverseRelationMeta; count: number; href: string | null }) {
   const empty = count === 0
   const chipBody = (
     <>
