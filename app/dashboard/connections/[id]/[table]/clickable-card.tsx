@@ -10,7 +10,7 @@ type Props = Readonly<{
 
 export function ClickableCard({ href, ariaLabel, children }: Props) {
   return (
-    <article className="relative cursor-pointer rounded-xl border bg-card p-4 shadow-sm ring-1 ring-foreground/5 transition hover:shadow-md">
+    <article className="relative cursor-pointer rounded-xl bg-card p-4 shadow-sm transition hover:shadow-md dark:border dark:border-stone-800">
       <Link
         href={href}
         aria-label={ariaLabel}

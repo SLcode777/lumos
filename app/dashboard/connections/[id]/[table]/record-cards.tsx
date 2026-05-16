@@ -6,7 +6,7 @@ import type { ColumnInfo } from "@/lib/introspect"
 import { cn } from "@/lib/utils"
 import { Cell } from "./cell"
 import { ClickableCard } from "./clickable-card"
-import { stringifyForTitle } from "@/lib/cell-format"
+import { isArrayColumn, looksLikeImageUrl, stringifyForTitle } from "@/lib/cell-format"
 import { FkLabels, lookupFkLabel } from "@/lib/resolve-fks"
 import {
   humanizeTableName,
@@ -116,6 +116,10 @@ function FieldChip({
 }) {
   const isFk = Boolean(fk)
   const fkLabel = lookupFkLabel(fkLabels, fk, value)
+  // Hide the type icon when the cell will render as a thumbnail — the image
+  // itself already conveys the column's content type, the "T" is just noise.
+  const isImage =
+    !isFk && !isArrayColumn(column.udtName) && typeof value === "string" && looksLikeImageUrl(value)
 
   return (
     <div
@@ -126,7 +130,7 @@ function FieldChip({
     >
       <p className="truncate text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{column.name}</p>
       <div className="mt-1 flex items-center gap-1.5">
-        <TypeIcon column={column} isFk={isFk} />
+        {!isImage && <TypeIcon column={column} isFk={isFk} />}
         <span className={cn("truncate text-sm", isFk && "text-violet-700 dark:text-violet-300")}>
           <Cell value={value} column={column} fkLabel={fkLabel} />
         </span>

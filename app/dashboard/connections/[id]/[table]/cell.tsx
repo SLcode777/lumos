@@ -1,5 +1,3 @@
-import { ExternalLink } from "lucide-react"
-
 import { Badge } from "@/components/ui/badge"
 import {
   DATE_TYPES,
@@ -8,6 +6,7 @@ import {
   formatDate,
   isArrayColumn,
   looksLikeUrl,
+  looksLikeImageUrl,
   normalizeDataType,
   previewJson,
   truncate,
@@ -15,6 +14,8 @@ import {
 import type { ColumnInfo } from "@/lib/introspect"
 import { cn } from "@/lib/utils"
 import { FkLabelSlot } from "@/lib/resolve-fks"
+import { ImagePreview } from "./image-preview" // ← ajout
+import { UrlLink } from "./url-link"
 
 const MAX_TEXT_PREVIEW = 80
 
@@ -128,25 +129,16 @@ export function Cell({ value, column, mode = "compact", fkLabel }: Props) {
   if (TEXT_TYPES.has(t)) {
     const str = String(value)
     if (looksLikeUrl(str)) {
-      return (
-        <a
-          href={str}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={str}
-          className={cn("underline-offset-2 hover:underline", mode === "full" && "break-all")}
-        >
-          {mode === "full" ? str : truncate(str, MAX_TEXT_PREVIEW)}
-          <ExternalLink className="ml-1 inline-block h-3 w-3 align-text-bottom" aria-hidden />
-        </a>
-      )
+      if (looksLikeImageUrl(str)) {
+        return <ImagePreview url={str} mode={mode} fallback={<UrlLink url={str} mode={mode} />} />
+      }
+      return <UrlLink url={str} mode={mode} />
     }
     if (mode === "full") {
       return <span className="wrap-break-words whitespace-pre-wrap">{str}</span>
     }
     return <span title={str.length > MAX_TEXT_PREVIEW ? str : undefined}>{truncate(str, MAX_TEXT_PREVIEW)}</span>
   }
-
   // Fallback: string-stringify, preview, italic. Truncate in compact, full text in full.
   let display: string
   try {

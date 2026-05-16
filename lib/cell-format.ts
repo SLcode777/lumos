@@ -52,6 +52,34 @@ export function looksLikeUrl(value: string): boolean {
 }
 
 /**
+ * True when the URL looks like a direct link to an image file. Detection is
+ * path-only and case-insensitive — the query string is ignored, so
+ * `https://cdn.example.com/avatar.png?v=42` still matches.
+ *
+ * Why path-only: many image URLs carry version/signature query strings,
+ * so testing the raw URL with `endsWith(".png")` misses 80% of CDN cases.
+ * Going through `new URL()` is the cleanest way to grab the pathname.
+ *
+ * Some popular image CDNs serve images at extensionless paths (e.g. GitHub
+ * avatars at `/u/123`). For those we match by hostname instead.
+ */
+const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|avif|svg)$/i
+
+const IMAGE_HOST_REGEX =
+  /(?:^|\.)(?:githubusercontent\.com|gravatar\.com|imgur\.com|googleusercontent\.com|twimg\.com|fbcdn\.net|cdninstagram\.com|cloudinary\.com|imagedelivery\.net|imagekit\.io|picsum\.photos)$/i
+
+export function looksLikeImageUrl(value: string): boolean {
+  if (!looksLikeUrl(value)) return false
+  try {
+    const u = new URL(value)
+    if (IMAGE_EXT_REGEX.test(u.pathname)) return true
+    return IMAGE_HOST_REGEX.test(u.hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
  * Truncate a string to `max` characters, adding an ellipsis if it was cut.
  * Returns the original string when shorter or equal.
  */

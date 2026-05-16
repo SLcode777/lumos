@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest"
 
-import { formatDate, isArrayColumn, looksLikeUrl, normalizeDataType, previewJson, truncate } from "@/lib/cell-format"
+import {
+  formatDate,
+  isArrayColumn,
+  looksLikeImageUrl,
+  looksLikeUrl,
+  normalizeDataType,
+  previewJson,
+  truncate,
+} from "@/lib/cell-format"
 
 describe("normalizeDataType", () => {
   it("lowercases and trims", () => {
@@ -28,6 +36,62 @@ describe("looksLikeUrl", () => {
     ["", false],
   ])("looksLikeUrl(%s) = %s", (input, expected) => {
     expect(looksLikeUrl(input)).toBe(expected)
+  })
+})
+
+describe("looksLikeImageUrl", () => {
+  it.each([
+    // Positive — basic extensions
+    ["https://example.com/foo.jpg", true],
+    ["https://example.com/foo.jpeg", true],
+    ["https://example.com/foo.png", true],
+    ["https://example.com/foo.webp", true],
+    ["https://example.com/foo.gif", true],
+    ["https://example.com/foo.avif", true],
+    ["https://example.com/foo.svg", true],
+
+    // Positive — uppercase
+    ["https://example.com/foo.JPG", true],
+    ["https://example.com/foo.PNG", true],
+
+    // Positive — query string after the extension
+    ["https://cdn.example.com/avatar.png?v=2", true],
+    ["https://cdn.example.com/avatar.jpg?w=300&h=300", true],
+
+    // Positive — path with multiple dots
+    ["https://example.com/v1.2/foo.bar.jpg", true],
+    ["https://example.com/some.dotted.path/image.webp", true],
+
+    // Positive — port
+    ["http://localhost:3000/uploads/profile.png", true],
+
+    // Positive — known image CDN hostnames (extensionless paths)
+    ["https://avatars.githubusercontent.com/u/156963099?v=4", true],
+    ["https://www.gravatar.com/avatar/abc123", true],
+    ["https://i.imgur.com/abc123", true],
+    ["https://lh3.googleusercontent.com/a/ACg8ocAbc", true],
+    ["https://pbs.twimg.com/profile_images/123/abc", true],
+    ["https://picsum.photos/seed/headphones/400/300", true],
+
+    // Negative — URL but no image extension
+    ["https://example.com/page", false],
+    ["https://example.com/page.html", false],
+    ["https://example.com/foo.json", false],
+
+    // Negative — lookalike hostname (suffix match must be on a dot boundary)
+    ["https://notgithubusercontent.com/u/1", false],
+
+    // Negative — not an HTTP(S) URL
+    ["data:image/png;base64,iVBORw0KGgo=", false],
+    ["ftp://example.com/foo.png", false],
+    ["foo.png", false], // path only, no scheme
+
+    // Negative — empty / garbage
+    ["", false],
+    ["just text with a dot.jpg in the middle", false],
+    ["http://", false], // malformed URL → URL() throws → false
+  ])("looksLikeImageUrl(%s) = %s", (input, expected) => {
+    expect(looksLikeImageUrl(input)).toBe(expected)
   })
 })
 
