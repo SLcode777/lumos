@@ -22,11 +22,19 @@ import { ColumnInfo, type DatabaseSchema, type TableInfo } from "@/lib/introspec
 import { type FkLabels, lookupFkLabel, resolveForeignKeyLabels } from "@/lib/resolve-fks"
 import {
   countInverseRelationsForPage,
+  fetchRelatedRows,
   humanizeTableName,
   inverseCountKey,
+  inverseRelationKey,
+  type InverseRelationMeta,
   type PageInverseRelations,
 } from "@/lib/inverse-relations"
-import { buildPanelCloseHref, buildPanelHref, parsePanelParams } from "@/lib/panel-href"
+import { buildPanelCloseHref, buildPanelHref, parsePanelParams, type PanelState } from "@/lib/panel-href"
+import {
+  RelatedRecordsSubPanel,
+  type RelatedRecordCardData,
+  type RelatedRecordsSubPanelData,
+} from "./related-records-subpanel"
 import type { Pool } from "pg"
 
 const PAGE_SIZES = [25, 50, 100] as const
@@ -144,23 +152,64 @@ export default async function TableViewPage({
     })
   )
 
-  // Parse panel state from the URL — orthogonal to the route. When `panel=row`,
-  // we run a fresh fetch pipeline (queryRowByPk + FK resolve + inverse counts)
-  // for the target row so the panel works for any row, not just one on the
-  // current page. The page-level batches above stay scoped to the row cards.
+  // Pre-compute hrefs for inverse-relation chips on the row cards. Keyed by
+  // `${rowPk}|${inverseRelationKey(meta)}`. Empty relations (count=0) are
+  // skipped — those chips stay inert. Composite-PK current tables never
+  // produce inverse meta (cf. countInverseRelationsForPage), so pkCol is set
+  // whenever there's anything to link.
+  const inverseHrefs = new Map<string, string>()
+  const pkCol = tableInfo.primaryKey[0]
+  if (pkCol) {
+    for (const row of rows) {
+      const rowPk = row[pkCol]
+      if (rowPk === null || rowPk === undefined) continue
+      const rowPkString = String(rowPk)
+      for (const meta of pageInverseRelations.meta) {
+        const count = pageInverseRelations.counts.get(inverseCountKey(rowPkString, meta)) ?? 0
+        if (count === 0) continue
+        inverseHrefs.set(
+          `${rowPkString}|${inverseRelationKey(meta)}`,
+          buildPanelHref(baseHref, persistentParams, {
+            mode: "related",
+            panelTable: meta.sourceTable,
+            panelFk: meta.fromColumn,
+            panelParentPk: rowPkString,
+          })
+        )
+      }
+    }
+  }
+
+  // Parse panel state from the URL — orthogonal to the route. Two modes are
+  // wired up: `row` (single-row detail, fresh fetch via buildRowPanelData) and
+  // `related` (drill-down list, fresh fetch via buildRelatedPanelData). The
+  // page-level batches above stay scoped to the row cards on the table view.
   const panelState = parsePanelParams(sp)
-  const panelData =
-    panelState?.mode === "row"
-      ? await buildRowPanelData({
-          pool,
-          schema,
-          panelTable: panelState.panelTable,
-          panelRow: panelState.panelRow,
-          currentTable: tableInfo,
-          currentRows: rows,
-          currentRowHrefs: rowHrefs,
-        })
-      : null
+  let panelData: PanelData | null = null
+  let relatedData: RelatedRecordsSubPanelData | null = null
+
+  if (panelState?.mode === "row") {
+    panelData = await buildRowPanelData({
+      pool,
+      schema,
+      panelTable: panelState.panelTable,
+      panelRow: panelState.panelRow,
+      currentTable: tableInfo,
+      currentRows: rows,
+      currentRowHrefs: rowHrefs,
+      baseHref,
+      persistentParams,
+    })
+  } else if (panelState?.mode === "related") {
+    relatedData = await buildRelatedPanelData({
+      pool,
+      schema,
+      panelState,
+      pageInverseRelationsMeta: pageInverseRelations.meta,
+      baseHref,
+      persistentParams,
+    })
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -177,6 +226,7 @@ export default async function TableViewPage({
           fkLabels={fkLabels}
           pageInverseRelations={pageInverseRelations}
           rowHrefs={rowHrefs}
+          inverseHrefs={inverseHrefs}
         />
       )}
       <PaginationControls page={page} pageSize={pageSize} totalPages={totalPages} totalEstimate={totalEstimate} />
@@ -185,6 +235,7 @@ export default async function TableViewPage({
         closeHref={closeHref}
         tableName={panelState?.panelTable ?? decodedTable}
       />
+      <RelatedRecordsSubPanel data={relatedData} closeHref={closeHref} />
     </div>
   )
 }
@@ -275,6 +326,10 @@ type BuildRowPanelDataParams = {
   currentRows: Record<string, unknown>[]
   /** Pre-built hrefs for prev/next when the panel row is on the visible page. */
   currentRowHrefs: string[]
+  /** Current route base href — used to build inverse-relation hrefs that stay on the current route. */
+  baseHref: string
+  /** Pagination/sort params preserved when toggling the sub-panel from inverse cards. */
+  persistentParams: URLSearchParams
 }
 
 /**
@@ -296,6 +351,8 @@ async function buildRowPanelData({
   currentTable,
   currentRows,
   currentRowHrefs,
+  baseHref,
+  persistentParams,
 }: BuildRowPanelDataParams): Promise<PanelData | null> {
   const target = schema.tables.find((t) => t.name === panelTable)
   if (!target) return null
@@ -393,16 +450,152 @@ async function buildRowPanelData({
         ),
       }
     }),
-    inverseRelations: panelInverse.meta.map((m) => ({
-      meta: m,
-      count: targetPkCol
+    inverseRelations: panelInverse.meta.map((m) => {
+      const count = targetPkCol
         ? panelInverse.counts.get(inverseCountKey(String(row[targetPkCol]), m)) ?? 0
-        : 0,
-    })),
+        : 0
+      // Pre-build the sub-panel href so the client component stays dumb.
+      // Empty relations (count=0) stay inert — render as <div>, not <Link>.
+      // The sub-panel's Back button uses router.back() to return here, so we
+      // don't need to encode a return path in the URL.
+      const href =
+        count > 0 && targetPkCol
+          ? buildPanelHref(baseHref, persistentParams, {
+              mode: "related",
+              panelTable: m.sourceTable,
+              panelFk: m.fromColumn,
+              panelParentPk: String(row[targetPkCol]),
+            })
+          : null
+      return { meta: m, count, href }
+    }),
     prevHref: indexInPage > 0 ? currentRowHrefs[indexInPage - 1] : null,
     nextHref:
       indexInPage >= 0 && indexInPage < currentRowHrefs.length - 1
         ? currentRowHrefs[indexInPage + 1]
         : null,
+  }
+}
+
+const RELATED_VISIBLE_FIELDS = 4
+
+type BuildRelatedPanelDataParams = {
+  pool: Pool
+  schema: DatabaseSchema
+  /** Already typed `mode: "related"` by the parsePanelParams discriminant. */
+  panelState: Extract<PanelState, { mode: "related" }>
+  /** Inverse-FK meta list for the current route's table — used to validate the (panelTable, panelFk) pair. */
+  pageInverseRelationsMeta: InverseRelationMeta[]
+  /** Current route base href — card hrefs use this so the chained nav stays on the route. */
+  baseHref: string
+  /** Pagination/sort params preserved when switching the panel mode. */
+  persistentParams: URLSearchParams
+}
+
+/**
+ * Builds the data shape consumed by `<RelatedRecordsSubPanel>` for `?panel=related`.
+ *
+ * Independent of the page-level batches: fetches the related rows fresh via
+ * `fetchRelatedRows`, batches FK humanization for them, and prepares clickable
+ * card hrefs that switch the panel into `row` mode on the SAME ROUTE (chained
+ * navigation never leaves the user's "browsing context").
+ *
+ * Returns null when:
+ *   - (panelTable, panelFk) doesn't match any eligible inverse FK of the current
+ *     route's table (stale or hand-typed URL)
+ *   - the source table isn't in the introspected schema
+ *   - fetchRelatedRows throws
+ */
+async function buildRelatedPanelData({
+  pool,
+  schema,
+  panelState,
+  pageInverseRelationsMeta,
+  baseHref,
+  persistentParams,
+}: BuildRelatedPanelDataParams): Promise<RelatedRecordsSubPanelData | null> {
+  // Validate: the (panelTable, panelFk) pair must match one of the current
+  // table's eligible inverse FKs. Otherwise the URL is stale or hand-crafted.
+  const meta = pageInverseRelationsMeta.find(
+    (m) => m.sourceTable === panelState.panelTable && m.fromColumn === panelState.panelFk
+  )
+  if (!meta) return null
+
+  // Sub-panel sort whitelisted against the SOURCE table's columns (not the route's).
+  const sourceTableInfo = schema.tables.find(
+    (t) => t.schema === meta.sourceSchema && t.name === meta.sourceTable
+  )
+  const sort = sourceTableInfo
+    ? parseSortParams(panelState.panelSort, panelState.panelOrder, sourceTableInfo.columns)
+    : null
+
+  let fetched
+  try {
+    fetched = await fetchRelatedRows({
+      pool,
+      schema,
+      meta,
+      parentPk: panelState.panelParentPk,
+      sort,
+    })
+  } catch (err) {
+    console.error("[panel] fetchRelatedRows failed:", err instanceof Error ? err.message : err)
+    return null
+  }
+  if (!fetched) return null
+
+  const { sourceTable, rows: relatedRows, fkLabels, total } = fetched
+  const sourcePrimary = pickPrimaryField(sourceTable.columns, sourceTable.primaryKey)
+  const sourcePkCol = sourceTable.primaryKey[0]
+  const sourceFkIndex = buildFkIndex(schema.foreignKeys, sourceTable.schema, sourceTable.name)
+
+  const otherCols = sourceTable.columns.filter((c) => c.name !== sourcePrimary.name)
+  const visibleCols = otherCols.slice(0, RELATED_VISIBLE_FIELDS)
+  const hiddenCount = Math.max(0, otherCols.length - RELATED_VISIBLE_FIELDS)
+
+  const cards: RelatedRecordCardData[] = relatedRows.map((row, i) => {
+    const keyValue = sourcePkCol ? String(row[sourcePkCol] ?? `#${i}`) : `#${i}`
+
+    // Click on a card → switch the panel into row mode for that target row.
+    // baseHref is the CURRENT route — we DO NOT navigate to /<sourceTable>.
+    // That's the whole point: chained nav stays on the current route.
+    // The row panel's Back button uses router.back() so no return URL needed.
+    const href = sourcePkCol
+      ? buildPanelHref(baseHref, persistentParams, {
+          mode: "row",
+          panelTable: sourceTable.name,
+          panelRow: String(row[sourcePkCol]),
+        })
+      : baseHref
+
+    return {
+      key: keyValue,
+      title: stringifyForTitle(row[sourcePrimary.name]),
+      hiddenCount,
+      href,
+      fields: visibleCols.map((col) => {
+        const fkInfo = sourceFkIndex.get(col.name)
+        const value = row[col.name]
+        return {
+          column: col,
+          isFk: Boolean(fkInfo),
+          content: (
+            <Cell
+              value={value}
+              column={col}
+              mode="compact"
+              fkLabel={lookupFkLabel(fkLabels, fkInfo, value)}
+            />
+          ),
+        }
+      }),
+    }
+  })
+
+  return {
+    sourceTableHuman: humanizeTableName(sourceTable.name),
+    sourceTableRaw: sourceTable.name,
+    cards,
+    total,
   }
 }

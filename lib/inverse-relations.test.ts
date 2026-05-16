@@ -421,3 +421,116 @@ describe("countInverseRelationsForPage", () => {
     expect(calls).toHaveLength(0)
   })
 })
+
+import { fetchRelatedRows, RELATED_ROWS_LIMIT } from "@/lib/inverse-relations"
+
+describe("fetchRelatedRows", () => {
+  type AnyRow = Record<string, unknown>
+
+  function makeFetchPool(handlers: {
+    /** Match by SQL substring. Order matters — first match wins. */
+    onQuery: (sql: string, params: unknown[]) => { rows: AnyRow[] }
+  }) {
+    const calls: { sql: string; params: unknown[] }[] = []
+    const pool = {
+      query: (sql: string, params: unknown[]) => {
+        calls.push({ sql, params })
+        return Promise.resolve(handlers.onQuery(sql, params))
+      },
+    } as unknown as import("pg").Pool
+    return { pool, calls }
+  }
+
+  const ordersMeta = {
+    sourceSchema: "public" as const,
+    sourceTable: "orders" as const,
+    fromColumn: "customer_id" as const,
+    ambiguous: false,
+  }
+
+  it("returns null when the source table is not in the schema", async () => {
+    const { pool } = makeFetchPool({ onQuery: () => ({ rows: [] }) })
+    const result = await fetchRelatedRows({
+      pool,
+      schema: { tables: [customersTable], foreignKeys: [] },
+      meta: ordersMeta,
+      parentPk: "c1",
+    })
+    expect(result).toBeNull()
+  })
+
+  it("returns null when parentPk is empty", async () => {
+    const { pool } = makeFetchPool({ onQuery: () => ({ rows: [] }) })
+    const result = await fetchRelatedRows({
+      pool,
+      schema,
+      meta: ordersMeta,
+      parentPk: "",
+    })
+    expect(result).toBeNull()
+  })
+
+  it("builds the right SQL and parameters", async () => {
+    const { pool, calls } = makeFetchPool({
+      onQuery: (sql) => {
+        if (sql.startsWith("SELECT COUNT")) return { rows: [{ n: "2" }] }
+        if (sql.startsWith("SELECT *"))
+          return {
+            rows: [
+              { id: "o1", customer_id: "c1" },
+              { id: "o2", customer_id: "c1" },
+            ],
+          }
+        return { rows: [] }
+      },
+    })
+
+    const result = await fetchRelatedRows({ pool, schema, meta: ordersMeta, parentPk: "c1" })
+
+    expect(result).not.toBeNull()
+    expect(result!.rows).toHaveLength(2)
+    expect(result!.total).toBe(2)
+    expect(result!.sourceTable.name).toBe("orders")
+
+    const selectCall = calls.find((c) => c.sql.startsWith("SELECT *"))!
+    expect(selectCall.sql).toContain(`FROM "public"."orders"`)
+    expect(selectCall.sql).toContain(`WHERE "customer_id" = $1`)
+    expect(selectCall.sql).toContain(`ORDER BY "id" ASC`) // first PK column default
+    expect(selectCall.sql).toMatch(/LIMIT \$2$/)
+    expect(selectCall.params).toEqual(["c1", RELATED_ROWS_LIMIT])
+  })
+
+  it("honors explicit sort over the PK default", async () => {
+    const { pool, calls } = makeFetchPool({
+      onQuery: (sql) => {
+        if (sql.startsWith("SELECT COUNT")) return { rows: [{ n: "0" }] }
+        return { rows: [] }
+      },
+    })
+
+    await fetchRelatedRows({
+      pool,
+      schema,
+      meta: ordersMeta,
+      parentPk: "c1",
+      sort: { column: "customer_id", direction: "desc" },
+    })
+
+    const selectCall = calls.find((c) => c.sql.startsWith("SELECT *"))!
+    expect(selectCall.sql).toContain(`ORDER BY "customer_id" DESC`)
+  })
+
+  it("reports total even when total > limit (truncation case)", async () => {
+    const { pool } = makeFetchPool({
+      onQuery: (sql) => {
+        if (sql.startsWith("SELECT COUNT")) return { rows: [{ n: "130" }] }
+        return { rows: Array.from({ length: 50 }, (_, i) => ({ id: `o${i}`, customer_id: "c1" })) }
+      },
+    })
+
+    const result = await fetchRelatedRows({ pool, schema, meta: ordersMeta, parentPk: "c1" })
+
+    expect(result!.rows).toHaveLength(50)
+    expect(result!.total).toBe(130)
+  })
+})

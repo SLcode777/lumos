@@ -1,0 +1,170 @@
+"use client"
+
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { createElement, useState } from "react"
+import { ChevronLeft, ChevronRight, XIcon } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import type { ColumnInfo } from "@/lib/introspect"
+import { getTableIcon } from "@/lib/table-icon"
+
+export type RelatedRecordCardData = {
+  /** Stable React key — typically the row's stringified PK. */
+  key: string
+  /** Title shown on the card (the primary field's value, already stringified). */
+  title: string
+  /** Pre-rendered field chips (column meta + Cell-rendered content). */
+  fields: { column: ColumnInfo; isFk: boolean; content: React.ReactNode }[]
+  /** Number of fields hidden under "+N more fields". */
+  hiddenCount: number
+  /** Where clicking the card navigates — pre-built via buildPanelHref (mode: "row"). */
+  href: string
+}
+
+export type RelatedRecordsSubPanelData = {
+  /** Title of the panel — humanized source table name. */
+  sourceTableHuman: string
+  /** Source table raw name (used for the icon). */
+  sourceTableRaw: string
+  /** Cards to render. Already sliced to RELATED_ROWS_LIMIT. */
+  cards: RelatedRecordCardData[]
+  /** Total count BEFORE limit — for the "first N of M" indicator. */
+  total: number
+}
+
+type Props = Readonly<{
+  data: RelatedRecordsSubPanelData | null
+  closeHref: string
+}>
+
+/**
+ * Side panel listing records related to a parent row via one inverse FK.
+ * Driven by ?panel=related&panelTable=...&panelFk=...&panelParentPk=... upstream
+ * — when `data` is non-null, the Sheet opens.
+ *
+ * Mirrors RowDetailPanel's stable-data pattern so the close animation has
+ * stable content.
+ */
+export function RelatedRecordsSubPanel({ data, closeHref }: Props) {
+  const router = useRouter()
+  const tableIconNode =
+    data &&
+    createElement(getTableIcon(data.sourceTableRaw), {
+      className: "h-4 w-4 shrink-0 text-muted-foreground",
+      "aria-hidden": true,
+    })
+
+  const [stableData, setStableData] = useState(data)
+  const [previousData, setPreviousData] = useState(data)
+  if (data !== previousData) {
+    setPreviousData(data)
+    if (data !== null) setStableData(data)
+  }
+
+  const open = data !== null
+  const truncated = stableData ? stableData.cards.length < stableData.total : false
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) router.push(closeHref, { scroll: false })
+      }}
+    >
+      <SheetContent
+        side="right"
+        className="flex w-full flex-col gap-0 p-0 data-[side=right]:sm:max-w-160"
+        overlayHref={closeHref}
+        overlayAriaLabel="Close related records panel"
+        showCloseButton={false}
+      >
+        <Button asChild variant="ghost" className="absolute top-4 right-4 bg-secondary" size="icon-sm">
+          <Link href={closeHref} aria-label="Close related records panel" scroll={false}>
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </Link>
+        </Button>
+
+        {stableData && (
+          <>
+            <SheetHeader className="border-b px-6 py-4">
+              <div className="flex min-w-0 items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0"
+                  onClick={() => router.back()}
+                  aria-label="Back"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="sr-only">Back</span>
+                </Button>
+                {tableIconNode}
+                <SheetTitle className="min-w-0 truncate text-sm font-semibold">
+                  {stableData.sourceTableHuman} ({stableData.total})
+                </SheetTitle>
+              </div>
+              <SheetDescription className="sr-only">
+                {stableData.total} related records in {stableData.sourceTableHuman}
+              </SheetDescription>
+            </SheetHeader>
+
+            <div className="flex-1 space-y-3 overflow-y-auto bg-muted/30 px-4 py-4">
+              {stableData.cards.map((card) => (
+                <article
+                  key={card.key}
+                  className="relative cursor-pointer rounded-xl bg-card p-4 shadow-sm transition hover:shadow-md dark:border dark:border-stone-800"
+                >
+                  <Link
+                    href={card.href}
+                    aria-label={`Open detail view for ${card.title}`}
+                    scroll={false}
+                    className="absolute inset-0 z-10 rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  />
+                  <div className="pointer-events-none relative z-20 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="truncate text-base font-semibold text-foreground">{card.title}</h3>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {card.fields.map(({ column, content, isFk }) => (
+                        <FieldChip key={column.name} column={column} isFk={isFk}>
+                          {content}
+                        </FieldChip>
+                      ))}
+                    </div>
+                    {card.hiddenCount > 0 && (
+                      <p className="mt-3 text-xs text-muted-foreground">+{card.hiddenCount} more fields</p>
+                    )}
+                  </div>
+                </article>
+              ))}
+
+              {truncated && (
+                <p className="px-2 pt-2 text-xs text-muted-foreground">
+                  Showing first {stableData.cards.length} of {stableData.total} records.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function FieldChip({ column, isFk, children }: { column: ColumnInfo; isFk: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className={
+        "rounded-md border bg-card p-2 " +
+        (isFk ? "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30" : "")
+      }
+    >
+      <p className="truncate text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{column.name}</p>
+      <div className="mt-1 truncate text-sm">{children}</div>
+    </div>
+  )
+}

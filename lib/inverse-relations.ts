@@ -175,3 +175,98 @@ export function humanizeTableName(name: string): string {
 export function pluralizeRecord(count: number): string {
   return count === 1 ? "1 record" : `${count} records`
 }
+
+import { resolveForeignKeyLabels, type FkLabels } from "@/lib/resolve-fks"
+import { pickPrimaryField } from "@/lib/primary-fields"
+import type { SortState } from "@/lib/sort"
+
+/** Maximum number of related rows fetched per sub-panel open. */
+export const RELATED_ROWS_LIMIT = 50
+
+export type FetchRelatedRowsParams = {
+  pool: Pool
+  schema: DatabaseSchema
+  /** The inverse-relation meta (already validated against the current table). */
+  meta: InverseRelationMeta
+  /** Parent row's PK value (the scalar that fkColumn must equal). */
+  parentPk: string
+  /** Optional sub-panel sort. Caller MUST have whitelisted the column. */
+  sort?: SortState | null
+  /** Hard limit (defaults to RELATED_ROWS_LIMIT). */
+  limit?: number
+}
+
+export type FetchRelatedRowsResult = {
+  /** The TableInfo of the source table (for column metadata + icon resolution). */
+  sourceTable: TableInfo
+  /** Rows returned (up to limit). */
+  rows: Record<string, unknown>[]
+  /** Resolved FK labels for the rows above — for humanizing inner FK cells. */
+  fkLabels: FkLabels
+  /** Total count BEFORE limit (so the UI can show "50 of N"). */
+  total: number
+}
+
+/**
+ * Fetches up to `limit` rows from `meta.sourceTable` where `meta.fromColumn`
+ * equals `parentPk`, sorted by `sort` (or the source's first PK column),
+ * and pre-resolves the FK labels for any forward FKs declared on the source.
+ *
+ * Returns `null` when:
+ *   - the source table isn't in the introspected schema (system schema?)
+ *   - the parent PK is empty / not stringifiable
+ *
+ * Errors propagate — the caller wraps in try/catch and renders an inline error.
+ */
+export async function fetchRelatedRows({
+  pool,
+  schema,
+  meta,
+  parentPk,
+  sort,
+  limit = RELATED_ROWS_LIMIT,
+}: FetchRelatedRowsParams): Promise<FetchRelatedRowsResult | null> {
+  const sourceTable = schema.tables.find((t) => t.schema === meta.sourceSchema && t.name === meta.sourceTable)
+  if (!sourceTable) return null
+  if (parentPk.length === 0) return null
+
+  // Sort: explicit > first PK column > none.
+  const effectiveSort: SortState | null =
+    sort ?? (sourceTable.primaryKey[0] ? { column: sourceTable.primaryKey[0], direction: "asc" } : null)
+
+  const orderClause = effectiveSort
+    ? ` ORDER BY ${escapeIdentifier(effectiveSort.column)} ${effectiveSort.direction === "desc" ? "DESC" : "ASC"}`
+    : ""
+
+  const sql =
+    `SELECT * FROM ${escapeIdentifier(meta.sourceSchema)}.${escapeIdentifier(meta.sourceTable)} ` +
+    `WHERE ${escapeIdentifier(meta.fromColumn)} = $1${orderClause} LIMIT $2`
+
+  const countSql =
+    `SELECT COUNT(*)::bigint AS n FROM ${escapeIdentifier(meta.sourceSchema)}.${escapeIdentifier(meta.sourceTable)} ` +
+    `WHERE ${escapeIdentifier(meta.fromColumn)} = $1`
+
+  // Rows + total in parallel. FK labels need rows so they run after.
+  const [rowsResult, totalResult] = await Promise.all([
+    pool.query<Record<string, unknown>>(sql, [parentPk, limit]),
+    pool.query<{ n: string }>(countSql, [parentPk]),
+  ])
+
+  const total = Number.parseInt(totalResult.rows[0]?.n ?? "0", 10)
+  const safeTotal = Number.isFinite(total) ? total : 0
+
+  // FK labels for the related rows — same pattern as the main page.
+  const fkLabels = await resolveForeignKeyLabels({
+    pool,
+    schema,
+    fromTable: sourceTable,
+    rows: rowsResult.rows,
+  })
+
+  return {
+    sourceTable,
+    rows: rowsResult.rows,
+    fkLabels,
+    total: safeTotal,
+  }
+}

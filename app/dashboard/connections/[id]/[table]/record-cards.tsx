@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Calendar, ChevronRight, Hash, Link2, ToggleLeft, Type } from "lucide-react"
 
 import { CardContent, CardHeader } from "@/components/ui/card"
@@ -11,6 +12,7 @@ import { FkLabels, lookupFkLabel } from "@/lib/resolve-fks"
 import {
   humanizeTableName,
   inverseCountKey,
+  inverseRelationKey,
   InverseRelationMeta,
   PageInverseRelations,
   pluralizeRecord,
@@ -27,6 +29,12 @@ type Props = Readonly<{
   fkLabels: FkLabels
   pageInverseRelations: PageInverseRelations
   rowHrefs: string[]
+  /**
+   * Pre-built sub-panel hrefs for non-empty inverse relations.
+   * Key: `${rowPk}|${inverseRelationKey(meta)}`. Missing key → empty relation →
+   * chip stays inert (renders as <div>, not <Link>).
+   */
+  inverseHrefs: Map<string, string>
 }>
 
 export function RecordCards({
@@ -38,6 +46,7 @@ export function RecordCards({
   fkLabels,
   pageInverseRelations,
   rowHrefs,
+  inverseHrefs,
 }: Props) {
   if (rows.length === 0) {
     return (
@@ -85,12 +94,15 @@ export function RecordCards({
                 />
               ))}
               {visibleInverse.map((meta) => {
-                const count = pageInverseRelations.counts.get(inverseCountKey(String(row[pkColumnName]), meta)) ?? 0
+                const rowPkString = String(row[pkColumnName])
+                const count = pageInverseRelations.counts.get(inverseCountKey(rowPkString, meta)) ?? 0
+                const href = inverseHrefs.get(`${rowPkString}|${inverseRelationKey(meta)}`) ?? null
                 return (
                   <InverseRelationChip
                     key={`${meta.sourceSchema}.${meta.sourceTable}.${meta.fromColumn}`}
                     meta={meta}
                     count={count}
+                    href={href}
                   />
                 )
               })}
@@ -139,16 +151,18 @@ function FieldChip({
   )
 }
 
-function InverseRelationChip({ meta, count }: { meta: InverseRelationMeta; count: number }) {
+function InverseRelationChip({
+  meta,
+  count,
+  href,
+}: {
+  meta: InverseRelationMeta
+  count: number
+  href: string | null
+}) {
   const empty = count === 0
-  return (
-    <div
-      className={cn(
-        "rounded-md border bg-card p-2",
-        !empty && "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30",
-        empty && "opacity-60"
-      )}
-    >
+  const chipBody = (
+    <>
       <p className="truncate text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
         {humanizeTableName(meta.sourceTable)}
         {meta.ambiguous && <span className="ml-1 text-muted-foreground/70 normal-case">({meta.fromColumn})</span>}
@@ -159,8 +173,34 @@ function InverseRelationChip({ meta, count }: { meta: InverseRelationMeta; count
           {pluralizeRecord(count)}
         </span>
       </div>
-    </div>
+    </>
   )
+
+  const classes = cn(
+    "block rounded-md border bg-card p-2",
+    !empty && "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30",
+    empty && "opacity-60",
+    href &&
+      "transition hover:border-violet-300 hover:bg-violet-100/80 dark:hover:border-violet-800 dark:hover:bg-violet-950/50"
+  )
+
+  // ClickableCard's parent Link sits in z-10 with pointer-events-auto and the
+  // children zone is pointer-events-none with `[&_a]:pointer-events-auto`, so
+  // an <a> here intercepts the click before the row-card link and routes to
+  // the sub-panel instead of the detail panel.
+  if (href) {
+    return (
+      <Link
+        href={href}
+        scroll={false}
+        className={classes}
+        aria-label={`Open ${humanizeTableName(meta.sourceTable)} sub-panel`}
+      >
+        {chipBody}
+      </Link>
+    )
+  }
+  return <div className={classes}>{chipBody}</div>
 }
 
 function TypeIcon({ column, isFk }: { column: ColumnInfo; isFk: boolean }) {

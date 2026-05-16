@@ -22,7 +22,12 @@ export type PanelData = {
    * (navigate to the target row's detail view).
    */
   fields: { column: ColumnInfo; content: React.ReactNode; isFk: boolean }[]
-  inverseRelations: { meta: InverseRelationMeta; count: number }[]
+  /**
+   * `href` is pre-built server-side. Non-null when count > 0 → the card is
+   * rendered as a Link to the related sub-panel (mode `related`). Null when
+   * count === 0 → card stays inert (visual-only).
+   */
+  inverseRelations: { meta: InverseRelationMeta; count: number; href: string | null }[]
   prevHref: string | null
   nextHref: string | null
 }
@@ -96,6 +101,16 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
           <>
             <SheetHeader className="border-b px-6 py-4">
               <div className="flex min-w-0 items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0"
+                  onClick={() => router.back()}
+                  aria-label="Back"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="sr-only">Back</span>
+                </Button>
                 {tableIconNode}
                 <span className="shrink-0 text-sm text-muted-foreground">{tableName}</span>
                 <span className="shrink-0 text-sm text-muted-foreground">/</span>
@@ -156,11 +171,12 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
                   <div className="text-sm">{content}</div>
                 </div>
               ))}
-              {stableData.inverseRelations.map(({ meta, count }) => (
+              {stableData.inverseRelations.map(({ meta, count, href }) => (
                 <InverseRelationCard
                   key={`${meta.sourceSchema}.${meta.sourceTable}.${meta.fromColumn}`}
                   meta={meta}
                   count={count}
+                  href={href}
                 />
               ))}
             </div>
@@ -171,17 +187,18 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
   )
 }
 
-function InverseRelationCard({ meta, count }: { meta: InverseRelationMeta; count: number }) {
+function InverseRelationCard({
+  meta,
+  count,
+  href,
+}: {
+  meta: InverseRelationMeta
+  count: number
+  href: string | null
+}) {
   const empty = count === 0
-  return (
-    <div
-      className={cn(
-        "rounded-xl border bg-card p-4 shadow-sm ring-1 ring-foreground/5",
-        !empty &&
-          "border-violet-200 bg-violet-50/60 ring-violet-200/40 dark:border-violet-900 dark:bg-violet-950/30 dark:ring-violet-900/30",
-        empty && "opacity-60"
-      )}
-    >
+  const cardBody = (
+    <>
       <p
         className={cn(
           "mb-1 flex items-center gap-1.5 text-[10px] font-medium tracking-wide uppercase",
@@ -193,6 +210,29 @@ function InverseRelationCard({ meta, count }: { meta: InverseRelationMeta; count
         {meta.ambiguous && <span className="ml-1 text-muted-foreground/70 normal-case">({meta.fromColumn})</span>}
       </p>
       <div className="text-sm">{pluralizeRecord(count)}</div>
-    </div>
+    </>
   )
+
+  const classes = cn(
+    "block rounded-xl border bg-card p-4 shadow-sm ring-1 ring-foreground/5",
+    !empty &&
+      "border-violet-200 bg-violet-50/60 ring-violet-200/40 dark:border-violet-900 dark:bg-violet-950/30 dark:ring-violet-900/30",
+    empty && "opacity-60",
+    href &&
+      "cursor-pointer transition hover:border-violet-300 hover:bg-violet-100/80 dark:hover:border-violet-800 dark:hover:bg-violet-950/50"
+  )
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        scroll={false}
+        className={classes}
+        aria-label={`Open ${humanizeTableName(meta.sourceTable)} sub-panel`}
+      >
+        {cardBody}
+      </Link>
+    )
+  }
+  return <div className={classes}>{cardBody}</div>
 }
