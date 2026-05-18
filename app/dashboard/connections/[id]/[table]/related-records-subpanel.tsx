@@ -39,6 +39,12 @@ export type RelatedRecordsSubPanelData = {
   cards: RelatedRecordCardData[]
   /** Total count BEFORE limit — for the "first N of M" indicator. */
   total: number
+  /**
+   * Link to the source table's page with the FK filter applied. Non-null when
+   * the result was truncated (cards.length < total). Clicking lands on the
+   * filtered table view with the active filter badge in the toolbar.
+   */
+  seeAllHref: string | null
 }
 
 type Props = Readonly<{
@@ -148,12 +154,21 @@ export function RelatedRecordsSubPanel({ data, closeHref }: Props) {
                   </div>
                 </article>
               ))}
-
-              {truncated && (
-                <p className="px-2 pt-2 text-xs text-muted-foreground">
-                  Showing first {stableData.cards.length} of {stableData.total} records.
-                </p>
-              )}
+              {truncated &&
+                (stableData.seeAllHref ? (
+                  <Link
+                    href={stableData.seeAllHref}
+                    scroll={false}
+                    className="block rounded-md px-2 pt-2 text-xs text-violet-700 transition hover:text-violet-800 dark:text-violet-500 dark:hover:text-violet-400"
+                  >
+                    Showing first {stableData.cards.length} of {stableData.total} records · See all →
+                  </Link>
+                ) : (
+                  <p className="px-2 pt-2 text-xs text-muted-foreground">
+                    Showing first {stableData.cards.length} of
+                    {stableData.total} records.
+                  </p>
+                ))}{" "}
             </div>
           </>
         )}

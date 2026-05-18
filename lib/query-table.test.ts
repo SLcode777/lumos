@@ -125,3 +125,92 @@ describe("queryRowByPk", () => {
     expect(captured.sql).toContain(`"we""ird_id" = $1`)
   })
 })
+
+describe("queryTableRows with where", () => {
+  it("applies WHERE clause and parameterizes the value", async () => {
+    const captured: { sql?: string; params?: unknown[] } = {}
+    const fakePool = {
+      query: (sql: string, params: unknown[]) => {
+        captured.sql = sql
+        captured.params = params
+        return Promise.resolve({ rows: [] })
+      },
+    } as unknown as import("pg").Pool
+
+    const { queryTableRows } = await import("@/lib/query-table")
+    await queryTableRows(fakePool, {
+      pgSchema: "public",
+      table: "products",
+      page: 2,
+      pageSize: 25,
+      where: { column: "in_stock", value: "true" },
+    })
+
+    expect(captured.sql).toContain(`WHERE "in_stock" = $1`)
+    expect(captured.sql).toMatch(/LIMIT \$\d+ OFFSET \$\d+/)
+    // params: [value, pageSize, offset] — order depends on your implementation
+    expect(captured.params).toContain("true")
+    expect(captured.params).toContain(25)
+  })
+
+  it("combines where with orderBy", async () => {
+    const captured: { sql?: string } = {}
+    const fakePool = {
+      query: (sql: string) => {
+        captured.sql = sql
+        return Promise.resolve({ rows: [] })
+      },
+    } as unknown as import("pg").Pool
+
+    const { queryTableRows } = await import("@/lib/query-table")
+    await queryTableRows(fakePool, {
+      pgSchema: "public",
+      table: "products",
+      page: 1,
+      pageSize: 50,
+      orderBy: { column: "name", direction: "desc" },
+      where: { column: "category_id", value: "abc" },
+    })
+
+    expect(captured.sql).toContain(`WHERE "category_id" = $1`)
+    expect(captured.sql).toContain(`ORDER BY "name" DESC`)
+  })
+})
+
+describe("queryTableRowCount", () => {
+  it("counts filtered rows", async () => {
+    const captured: { sql?: string; params?: unknown[] } = {}
+    const fakePool = {
+      query: (sql: string, params: unknown[]) => {
+        captured.sql = sql
+        captured.params = params
+        return Promise.resolve({ rows: [{ n: "42" }] })
+      },
+    } as unknown as import("pg").Pool
+
+    const { queryTableRowCount } = await import("@/lib/query-table")
+    const n = await queryTableRowCount(fakePool, {
+      pgSchema: "public",
+      table: "products",
+      where: { column: "in_stock", value: "true" },
+    })
+
+    expect(n).toBe(42)
+    expect(captured.sql).toContain(`SELECT COUNT(*)::bigint`)
+    expect(captured.sql).toContain(`WHERE "in_stock" = $1`)
+    expect(captured.params).toEqual(["true"])
+  })
+
+  it("returns 0 on missing/invalid count", async () => {
+    const fakePool = {
+      query: () => Promise.resolve({ rows: [] }),
+    } as unknown as import("pg").Pool
+    const { queryTableRowCount } = await import("@/lib/query-table")
+    const n = await queryTableRowCount(fakePool, {
+      pgSchema: "public",
+      table: "products",
+      where: { column: "x", value: "y" },
+    })
+    expect(n).toBe(0)
+  })
+})

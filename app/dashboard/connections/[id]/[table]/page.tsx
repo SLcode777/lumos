@@ -6,7 +6,8 @@ import { getSession } from "@/lib/get-session"
 import { loadConnection } from "@/lib/load-connection"
 import { loadSchema } from "@/lib/load-schema"
 import { getConnectionPool } from "@/lib/pool-manager"
-import { queryRowByPk, queryTableRows } from "@/lib/query-table"
+import { queryRowByPk, queryTableRowCount, queryTableRows } from "@/lib/query-table"
+import { buildClearWhereHref, parseWhereParam } from "@/lib/filter"
 
 import { PaginationControls } from "./pagination-controls"
 import { buildFkIndex } from "@/lib/fk-index"
@@ -88,6 +89,7 @@ export default async function TableViewPage({
   const pageSize = parsePageSize(sp.pageSize)
   const page = parsePage(sp.page)
   const sort = parseSortParams(sp.sort, sp.order, tableInfo.columns)
+  const where = parseWhereParam(sp.where, tableInfo.columns)
 
   let rows: Record<string, unknown>[] = []
   let queryError: string | null = null
@@ -98,6 +100,7 @@ export default async function TableViewPage({
       page,
       pageSize,
       orderBy: sort,
+      where,
     })
     rows = result.rows
   } catch (err) {
@@ -122,7 +125,23 @@ export default async function TableViewPage({
     fkLabels = labels
     pageInverseRelations = inv
   }
-  const totalEstimate = tableInfo.rowCountEstimate >= 0 ? tableInfo.rowCountEstimate : 0
+  let totalEstimate = tableInfo.rowCountEstimate >= 0 ? tableInfo.rowCountEstimate : 0
+  if (where) {
+    // n_live_tup is per-table; doesn't know about filters. Count for real.
+    // Cost: O(N) on the filtered subset, but only paid when filter is active —
+    // and a filter is a deliberate user action, so the extra latency is OK.
+    try {
+      totalEstimate = await queryTableRowCount(pool, {
+        pgSchema: tableInfo.schema,
+        table: tableInfo.name,
+        where,
+      })
+    } catch (err) {
+      console.error("[table-view] queryTableRowCount failed:", err instanceof Error ? err.message : err)
+      // Fall back to the unfiltered estimate — pagination won't be precise but
+      // the page still renders.
+    }
+  }
   const totalPages = Math.max(1, Math.ceil(totalEstimate / pageSize))
 
   const primary = pickPrimaryField(tableInfo.columns, tableInfo.primaryKey)
@@ -138,6 +157,14 @@ export default async function TableViewPage({
   if (sort) {
     persistentParams.set("sort", sort.column)
     persistentParams.set("order", sort.direction)
+  }
+  // Compute clearWhereHref BEFORE pushing `where` into persistentParams — even
+  // though buildClearWhereHref strips it defensively, the intent is clearer
+  // this way and survives anyone changing the helper later.
+  const clearWhereHref = buildClearWhereHref(baseHref, persistentParams)
+  if (where) {
+    // Preserve filter when navigating between pages, opening panels, etc.
+    persistentParams.set("where", `${where.column}:${where.value}`)
   }
 
   const sortHrefs = buildSortHrefs(baseHref, sp, sort, tableInfo.columns)
@@ -237,12 +264,19 @@ export default async function TableViewPage({
       panelState,
       baseHref,
       persistentParams,
+      connectionId: id,
     })
   }
 
   return (
     <div className="flex h-full flex-col">
-      <TableToolbar columns={tableInfo.columns} sort={sort} sortHrefs={sortHrefs} />
+      <TableToolbar
+        columns={tableInfo.columns}
+        sort={sort}
+        sortHrefs={sortHrefs}
+        where={where}
+        clearWhereHref={clearWhereHref}
+      />
       {queryError ? (
         <InlineErrorState message={queryError} />
       ) : (
@@ -305,6 +339,9 @@ function buildSortHrefs(
     if (typeof sp.pageSize === "string") params.set("pageSize", sp.pageSize)
     if (nextSort) params.set("sort", nextSort)
     if (nextOrder) params.set("order", nextOrder)
+    // Preserve the active filter across sort changes — sort and filter are
+    // orthogonal axes of the view, neither should clear the other.
+    if (typeof sp.where === "string") params.set("where", sp.where)
     // page is intentionally reset to 1 (= absent param), see JSDoc above.
     const qs = params.toString()
     return qs ? `${baseHref}?${qs}` : baseHref
@@ -516,6 +553,8 @@ type BuildRelatedPanelDataParams = {
   baseHref: string
   /** Pagination/sort params preserved when switching the panel mode. */
   persistentParams: URLSearchParams
+  /** Connection id — needed to build the "See all" Link target (a different route). */
+  connectionId: string
 }
 
 /**
@@ -538,6 +577,7 @@ async function buildRelatedPanelData({
   panelState,
   baseHref,
   persistentParams,
+  connectionId,
 }: BuildRelatedPanelDataParams): Promise<RelatedRecordsSubPanelData | null> {
   // Validate: the (panelTable, panelFk) pair must match a real single-column FK
   // in the introspected schema. We validate globally (not just against the route
@@ -651,5 +691,21 @@ async function buildRelatedPanelData({
     sourceTableRaw: sourceTable.name,
     cards,
     total,
+    seeAllHref:
+      total > cards.length
+        ? buildSeeAllHref(connectionId, sourceTable.name, meta.fromColumn, panelState.panelParentPk)
+        : null,
   }
+}
+
+/**
+ * Build the "See all N records" Link target — navigates to the SOURCE table's
+ * route (a real route change, unlike the panel-only chained nav) with the
+ * inverse-FK filter pre-applied. Lands the user on the filtered table view.
+ */
+function buildSeeAllHref(connectionId: string, sourceTable: string, fkColumn: string, parentPk: string): string {
+  const sourceBase = `/dashboard/connections/${connectionId}/${encodeURIComponent(sourceTable)}`
+  const params = new URLSearchParams()
+  params.set("where", `${fkColumn}:${parentPk}`)
+  return `${sourceBase}?${params.toString()}`
 }
