@@ -113,10 +113,9 @@ export type QueryTableRowCountParams = {
 /**
  * Exact COUNT(*) of rows matching the filter.
  *
- * Only called when a filter is active — without filter, the table view keeps
- * using `n_live_tup` for pagination boundaries (cheap O(1) lookup; cf. #42 for
- * the safety net when estimates lie). With filter, n_live_tup doesn't know
- * about it, so we have to count for real.
+ * Only called when a filter is active — without filter, the table view reuses
+ * the exact schema-level count. With filter, that count doesn't know about the
+ * WHERE clause, so we have to count for real.
  *
  * Cost: O(N) on the filtered subset. For most filtered queries this is
  * negligible (indexed FK columns). On a 10M-row table with a non-indexed

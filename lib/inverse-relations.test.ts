@@ -14,7 +14,7 @@ import {
 const customersTable: TableInfo = {
   schema: "public",
   name: "customers",
-  rowCountEstimate: 100,
+  rowCount: 100,
   primaryKey: ["id"],
   columns: [
     { name: "id", dataType: "uuid", udtName: "uuid", isNullable: false, defaultValue: null, ordinalPosition: 1 },
@@ -25,7 +25,7 @@ const customersTable: TableInfo = {
 const ordersTable: TableInfo = {
   schema: "public",
   name: "orders",
-  rowCountEstimate: 500,
+  rowCount: 500,
   primaryKey: ["id"],
   columns: [
     { name: "id", dataType: "uuid", udtName: "uuid", isNullable: false, defaultValue: null, ordinalPosition: 1 },
@@ -43,7 +43,7 @@ const ordersTable: TableInfo = {
 const reviewsTable: TableInfo = {
   schema: "public",
   name: "reviews",
-  rowCountEstimate: 50,
+  rowCount: 50,
   primaryKey: ["id"],
   columns: [
     { name: "id", dataType: "uuid", udtName: "uuid", isNullable: false, defaultValue: null, ordinalPosition: 1 },
@@ -61,7 +61,7 @@ const reviewsTable: TableInfo = {
 const auditLogTable: TableInfo = {
   schema: "public",
   name: "audit_logs",
-  rowCountEstimate: 1000,
+  rowCount: 1000,
   primaryKey: ["id"],
   columns: [
     { name: "id", dataType: "uuid", udtName: "uuid", isNullable: false, defaultValue: null, ordinalPosition: 1 },

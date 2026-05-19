@@ -125,24 +125,24 @@ export default async function TableViewPage({
     fkLabels = labels
     pageInverseRelations = inv
   }
-  let totalEstimate = tableInfo.rowCountEstimate >= 0 ? tableInfo.rowCountEstimate : 0
+  let totalRows = tableInfo.rowCount >= 0 ? tableInfo.rowCount : 0
   if (where) {
-    // n_live_tup is per-table; doesn't know about filters. Count for real.
+    // The schema-level count is per-table; it doesn't know about filters. Count for real.
     // Cost: O(N) on the filtered subset, but only paid when filter is active —
     // and a filter is a deliberate user action, so the extra latency is OK.
     try {
-      totalEstimate = await queryTableRowCount(pool, {
+      totalRows = await queryTableRowCount(pool, {
         pgSchema: tableInfo.schema,
         table: tableInfo.name,
         where,
       })
     } catch (err) {
       console.error("[table-view] queryTableRowCount failed:", err instanceof Error ? err.message : err)
-      // Fall back to the unfiltered estimate — pagination won't be precise but
+      // Fall back to the unfiltered count — pagination won't account for the filter but
       // the page still renders.
     }
   }
-  const totalPages = Math.max(1, Math.ceil(totalEstimate / pageSize))
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize))
 
   const primary = pickPrimaryField(tableInfo.columns, tableInfo.primaryKey)
   const fkIndex = buildFkIndex(schema.foreignKeys, tableInfo.schema, tableInfo.name)
@@ -293,7 +293,7 @@ export default async function TableViewPage({
           fkHrefs={fkHrefs}
         />
       )}
-      <PaginationControls page={page} pageSize={pageSize} totalPages={totalPages} totalEstimate={totalEstimate} />
+      <PaginationControls page={page} pageSize={pageSize} totalPages={totalPages} totalRows={totalRows} />
       <RowDetailPanel data={panelData} closeHref={closeHref} tableName={panelState?.panelTable ?? decodedTable} />
       <RelatedRecordsSubPanel data={relatedData} closeHref={closeHref} />
     </div>

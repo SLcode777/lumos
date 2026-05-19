@@ -1,5 +1,7 @@
 import type { Pool } from "pg"
 
+import { escapeIdentifier } from "@/lib/query-table"
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,8 +20,8 @@ export type ColumnInfo = {
 export type TableInfo = {
   schema: string
   name: string
-  /** Estimate from pg_stat_user_tables.n_live_tup. -1 if no stats available. */
-  rowCountEstimate: number
+  /** Exact row count. */
+  rowCount: number
   columns: ColumnInfo[]
   /** Column names making up the primary key, in order. Empty array if no PK. */
   primaryKey: string[]
@@ -65,19 +67,21 @@ const SYSTEM_SCHEMA_FILTER = `
  * Reads the schema of every user table reachable through the given `pool`
  * and returns a typed model.
  *
- * Three queries run in parallel:
+ * Schema metadata queries run in parallel:
  *   1. tables + columns (information_schema.tables JOIN columns)
  *   2. constraints — PK + FK in one go (information_schema.*)
- *   3. row count estimates (pg_stat_user_tables.n_live_tup)
+ *
+ * Row counts are exact COUNT(*) queries. Postgres planner stats such as
+ * pg_stat_user_tables.n_live_tup can be stale right after seed/import work,
+ * which makes the sidebar visibly wrong until autovacuum/analyze catches up.
  *
  * Errors propagate. Don't swallow them — the caller decides whether to show
  * an error state or 500 the request.
  */
 export async function introspectSchema(pool: Pool): Promise<DatabaseSchema> {
-  const [columnsRows, constraintRows, rowCountRows] = await Promise.all([
+  const [columnsRows, constraintRows] = await Promise.all([
     queryColumns(pool),
     queryConstraints(pool),
-    queryRowCounts(pool),
   ])
 
   // Build tables index: schema.table → TableInfo
@@ -89,7 +93,7 @@ export async function introspectSchema(pool: Pool): Promise<DatabaseSchema> {
       table = {
         schema: row.table_schema,
         name: row.table_name,
-        rowCountEstimate: -1, // filled in below
+        rowCount: -1, // filled in below
         columns: [],
         primaryKey: [], // filled in below
       }
@@ -105,12 +109,14 @@ export async function introspectSchema(pool: Pool): Promise<DatabaseSchema> {
     })
   }
 
+  const rowCountRows = await queryRowCounts(pool, [...tableIndex.values()])
+
   // Apply row counts
   for (const row of rowCountRows) {
     const key = qualified(row.schemaname, row.relname)
     const table = tableIndex.get(key)
     if (table) {
-      table.rowCountEstimate = Number(row.n_live_tup)
+      table.rowCount = row.row_count
     }
   }
 
@@ -242,20 +248,22 @@ async function queryConstraints(pool: Pool): Promise<ConstraintRow[]> {
 type RowCountRow = {
   schemaname: string
   relname: string
-  n_live_tup: string // pg numeric arrives as string in node-postgres
+  row_count: number
 }
 
-async function queryRowCounts(pool: Pool): Promise<RowCountRow[]> {
-  // pg_stat_user_tables only has user tables (excludes pg_*). Still apply
-  // our filter as defense in depth in case the view's behavior changes.
-  const sql = `
-    SELECT schemaname, relname, n_live_tup
-    FROM pg_stat_user_tables
-    WHERE schemaname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
-      AND schemaname NOT LIKE 'pg_%'
-  `
-  const result = await pool.query<RowCountRow>(sql)
-  return result.rows
+async function queryRowCounts(pool: Pool, tables: Pick<TableInfo, "schema" | "name">[]): Promise<RowCountRow[]> {
+  return Promise.all(
+    tables.map(async (table) => {
+      const sql = `SELECT COUNT(*)::bigint AS row_count FROM ${escapeIdentifier(table.schema)}.${escapeIdentifier(table.name)}`
+      const result = await pool.query<{ row_count: string }>(sql)
+      const count = Number.parseInt(result.rows[0]?.row_count ?? "0", 10)
+      return {
+        schemaname: table.schema,
+        relname: table.name,
+        row_count: Number.isFinite(count) ? count : 0,
+      }
+    })
+  )
 }
 
 function qualified(schema: string, name: string): string {

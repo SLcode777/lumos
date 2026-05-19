@@ -9,13 +9,13 @@ type Props = Readonly<{
   page: number
   pageSize: number
   totalPages: number
-  totalEstimate: number
+  totalRows: number
 }>
 
 const PAGE_SIZES = [25, 50, 100] as const
 const compactNumber = new Intl.NumberFormat("en", { notation: "compact" })
 
-export function PaginationControls({ page, pageSize, totalPages, totalEstimate }: Props) {
+export function PaginationControls({ page, pageSize, totalPages, totalRows }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -54,7 +54,7 @@ export function PaginationControls({ page, pageSize, totalPages, totalEstimate }
             </option>
           ))}
         </select>
-        <span className="text-muted-foreground">~{compactNumber.format(totalEstimate)} rows</span>
+        <span className="text-muted-foreground">{compactNumber.format(totalRows)} rows</span>
       </div>
 
       <div className="flex items-center gap-2">

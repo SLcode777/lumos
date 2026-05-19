@@ -17,7 +17,7 @@ beforeAll(async () => {
 }, 15_000)
 
 afterAll(async () => {
-  await pool.end()
+  await pool?.end()
 })
 
 describe("introspectSchema", () => {
@@ -59,11 +59,19 @@ describe("introspectSchema", () => {
     }
   })
 
-  it("returns row count estimates as numbers >= 0 (or -1 if missing)", () => {
+  it("returns exact row counts as numbers >= 0 (or -1 if missing)", () => {
     for (const t of schema.tables) {
-      expect(typeof t.rowCountEstimate).toBe("number")
-      expect(t.rowCountEstimate).toBeGreaterThanOrEqual(-1)
+      expect(typeof t.rowCount).toBe("number")
+      expect(t.rowCount).toBeGreaterThanOrEqual(-1)
     }
+  })
+
+  it("returns exact row counts for deterministic demo tables", () => {
+    const counts = new Map(schema.tables.map((t) => [t.name, t.rowCount]))
+    expect(counts.get("categories")).toBe(10)
+    expect(counts.get("users")).toBe(25)
+    expect(counts.get("products")).toBe(30)
+    expect(counts.get("orders")).toBe(80)
   })
 
   it("captures column metadata: nullability, defaults, types", () => {

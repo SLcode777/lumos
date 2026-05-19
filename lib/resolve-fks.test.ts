@@ -8,7 +8,7 @@ import { fkLabelKey, lookupFkLabel, resolveForeignKeyLabels, type FkLabels } fro
 const customersTable: TableInfo = {
   schema: "public",
   name: "customers",
-  rowCountEstimate: 100,
+  rowCount: 100,
   primaryKey: ["id"],
   columns: [
     { name: "id", dataType: "uuid", udtName: "uuid", isNullable: false, defaultValue: null, ordinalPosition: 1 },
@@ -19,7 +19,7 @@ const customersTable: TableInfo = {
 const ordersTable: TableInfo = {
   schema: "public",
   name: "orders",
-  rowCountEstimate: 500,
+  rowCount: 500,
   primaryKey: ["id"],
   columns: [
     { name: "id", dataType: "uuid", udtName: "uuid", isNullable: false, defaultValue: null, ordinalPosition: 1 },
@@ -38,7 +38,7 @@ const ordersTable: TableInfo = {
 const shopsTable: TableInfo = {
   schema: "public",
   name: "shops",
-  rowCountEstimate: 5,
+  rowCount: 5,
   primaryKey: ["id"],
   columns: [
     { name: "id", dataType: "integer", udtName: "int4", isNullable: false, defaultValue: null, ordinalPosition: 1 },

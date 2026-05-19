@@ -13,7 +13,7 @@ import { refreshSchemaAction } from "./actions"
 
 type GroupedTable = {
   schema: string
-  tables: { name: string; rowCountEstimate: number }[]
+  tables: { name: string; rowCount: number }[]
 }
 
 type Props = {
@@ -100,7 +100,7 @@ export function SidebarClient({ connectionId, groupedTables, showSchemaHeaders }
                             <span className="truncate">{t.name}</span>
                           </span>
                           <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                            {formatRowCount(t.rowCountEstimate)}
+                            {formatRowCount(t.rowCount)}
                           </span>
                         </Link>
                       </li>

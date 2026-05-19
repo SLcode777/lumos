@@ -20,7 +20,7 @@ export function Sidebar({ schema, connectionId }: Props) {
         schema: schemaName,
         tables: tables.map((t) => ({
           name: t.name,
-          rowCountEstimate: t.rowCountEstimate,
+          rowCount: t.rowCount,
         })),
       }))}
       showSchemaHeaders={showSchemaHeaders}

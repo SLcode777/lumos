@@ -1,0 +1,24 @@
+services:
+  db-demo:
+    image: postgres:16-alpine
+    container_name: lumos-db-demo-2
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: shop
+    ports:
+      # Host port 5434 to avoid clashing with Lumos's app DB on 5433.
+      - "5435:5432"
+    volumes:
+      - db-demo-2-data:/var/lib/postgresql/data
+      # Postgres auto-runs every .sql in this dir on first start (only).
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d shop"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db-demo-2-data:
