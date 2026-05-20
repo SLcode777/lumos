@@ -72,6 +72,82 @@ export function buildConnectionStringFromFields(fields: {
   return url.toString()
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Connection form state types + FormData → connection string resolver.
+// Pure helpers, no IO. Live here (not in a "use server" file) so they can be
+// exported as sync functions and consumed by both server actions and the
+// shared <ConnectionForm> component.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ConnectionFormState = {
+  fieldErrors?: Partial<Record<"name" | "connectionString" | "host" | "port" | "database" | "user", string>>
+  formError?: string
+}
+
+export type FieldErrors = NonNullable<ConnectionFormState["fieldErrors"]>
+
+export type ResolvedConnectionString =
+  | { ok: true; connectionString: string }
+  | { ok: false; fieldErrors: FieldErrors }
+
+/**
+ * Reads `mode` + the per-mode fields from the FormData and produces a
+ * connection string. Used by createConnectionAction (for save),
+ * updateConnectionAction (for rotate-credentials), and testConnectionAction
+ * (for the test-before-save button). NEVER logs the resolved string.
+ */
+export function resolveConnectionStringFromFormData(formData: FormData): ResolvedConnectionString {
+  const mode = (formData.get("mode") as string | null) ?? "url"
+  const fieldErrors: FieldErrors = {}
+
+  if (mode === "url") {
+    const raw = (formData.get("connectionString") as string | null) ?? ""
+    const parsed = parseConnectionString(raw)
+    if (!parsed.ok) {
+      fieldErrors.connectionString = parsed.error
+      return { ok: false, fieldErrors }
+    }
+    return { ok: true, connectionString: parsed.normalizedUrl }
+  }
+
+  if (mode === "fields") {
+    const host = ((formData.get("host") as string | null) ?? "").trim()
+    const portRaw = ((formData.get("port") as string | null) ?? "5432").trim()
+    const database = ((formData.get("database") as string | null) ?? "").trim()
+    const user = ((formData.get("user") as string | null) ?? "").trim()
+    const password = (formData.get("password") as string | null) ?? ""
+
+    if (!host) fieldErrors.host = "Host is required"
+    if (!database) fieldErrors.database = "Database name is required"
+    if (!user) fieldErrors.user = "User is required"
+
+    const port = Number.parseInt(portRaw, 10)
+    if (!Number.isFinite(port) || port < 1 || port > 65535) {
+      fieldErrors.port = "Port must be between 1 and 65535"
+    }
+
+    if (Object.keys(fieldErrors).length > 0) {
+      return { ok: false, fieldErrors }
+    }
+
+    const built = buildConnectionStringFromFields({
+      host,
+      port,
+      database,
+      user,
+      password: password || undefined,
+    })
+    const parsed = parseConnectionString(built)
+    if (!parsed.ok) {
+      fieldErrors.host = parsed.error
+      return { ok: false, fieldErrors }
+    }
+    return { ok: true, connectionString: parsed.normalizedUrl }
+  }
+
+  return { ok: false, fieldErrors: { connectionString: "Invalid form mode" } }
+}
+
 
 /**
  * What the dashboard renders for each connection card. Carefully scoped:

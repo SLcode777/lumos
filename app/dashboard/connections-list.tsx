@@ -1,7 +1,8 @@
 import Link from "next/link"
-import { Lock, Eye, ShieldCheck, Share2 } from "lucide-react"
+import { Lock, Eye, ShieldCheck, Share2, Edit } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 import type { ConnectionListItem } from "@/lib/connections"
@@ -27,13 +28,26 @@ export function ConnectionsList({ title, connections, variant }: Props) {
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {connections.map((c) => (
-            <li key={c.id}>
+            <li key={c.id} className="group relative">
               <Link
                 href={`/dashboard/connections/${c.id}`}
-                className="block rounded-lg transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="block rounded-lg transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-90 group-focus-within:opacity-90"
               >
                 <ConnectionCard connection={c} showSharedBy={variant === "shared"} />
               </Link>
+              {variant === "owned" ? (
+                <Button
+                  asChild
+                  variant="card"
+                  size="icon"
+                  className="absolute top-2 right-2 h-8 w-8 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+                  aria-label={`Edit ${c.name}`}
+                >
+                  <Link href={`/dashboard/connections/${c.id}/settings`}>
+                    <Edit className="h-4 w-4" />
+                  </Link>
+                </Button>
+              ) : null}
             </li>
           ))}
         </ul>

@@ -5,8 +5,8 @@ import { ArrowLeft } from "lucide-react"
 import { AppHeader } from "@/components/app-header"
 import { Button } from "@/components/ui/button"
 import { getSession } from "@/lib/get-session"
-
-import { ConnectionForm } from "./connection-form"
+import { ConnectionForm } from "@/components/connection-form"
+import { createConnectionAction } from "./actions"
 
 export default async function NewConnectionPage() {
   const session = await getSession()
@@ -32,7 +32,7 @@ export default async function NewConnectionPage() {
           </p>
         </header>
 
-        <ConnectionForm />
+        <ConnectionForm mode="create" action={createConnectionAction} />
       </main>
     </div>
   )
