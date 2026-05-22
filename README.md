@@ -236,10 +236,10 @@ Lumos is built in 10 phases (see [PRD](./PRD.md) §5 for the detail). Status bel
 |---|---|
 | **1. Foundations** — auth (Better Auth, email/password), admin invitations, role-based access, AES-256-GCM credential encryption, connections dashboard | ✅ Done |
 | **2. Schema introspection** — auto-discovery of tables, columns, types, PKs, FKs, navigation sidebar | ✅ Done |
-| **3. Data browsing** — paginated table view, type-aware cell rendering, row detail panel | 🚧 In progress (sort, FK humanization, inverse relation counts, image previews to come) |
+| **3. Data browsing** — paginated table view, sortable columns, type-aware cell rendering (dates, JSON, images, URLs), row detail panel | ✅ Done |
 | **4. Connection sharing** — owners share read-only access with viewers, credentials never exposed client-side | ⏳ Planned |
-| **5. Filtering and search** — global search + type-aware combinable filters with safe SQL construction | ⏳ Planned |
-| **6. Relational navigation** — follow FKs between records, reverse related records, breadcrumbs | ⏳ Planned |
+| **5. Filtering and search** — global search + type-aware combinable filters with safe SQL construction | 🚧 In progress (single-column URL-driven filter shipped; full search + combinable operators planned) |
+| **6. Relational navigation** — humanized FK labels, click-through to FK target, inverse relation counts and drill-down sub-panel, all without leaving the current route | ✅ Done |
 | **7. Inline editing** — edit data in the detail view with optimistic updates and validation | ⏳ Planned |
 | **8. Schema diagram** — interactive ERD visualization with React Flow + auto-layout | ⏳ Planned |
 | **9. Export** — export filtered data as CSV / JSON | ⏳ Planned |

@@ -273,9 +273,9 @@ model TableLayout {
 | Fonctionnalité | Détail |
 |---|---|
 | Détection des FK | À l'introspection, on identifie toutes les foreign keys et leurs tables cibles. |
-| Lien cliquable | Dans la vue détail d'un record, chaque champ FK affiche le nom de la table cible et le record lié. Clic → navigation vers ce record. |
-| Records liés | Dans la vue détail, section "Related records" montrant les tables qui référencent le record courant (reverse FK). Avec le count et un lien pour voir la liste. |
-| Breadcrumb | Fil d'Ariane montrant le chemin de navigation entre les tables (ex: Products → Orders → Customers). |
+| FK humanisées | Dans la grille et la vue détail, chaque cellule FK affiche le primary field de la row cible (ex: `The Gourmet Pantry`) au lieu de l'UUID brut. |
+| Lien cliquable | Clic sur une cellule FK → ouvre le row detail panel de la row cible, sans changement de route (chained-panel architecture). |
+| Records liés | Dans la vue détail, section "Related records" montrant les tables qui référencent le record courant (reverse FK) avec leur count. Clic → sub-panel listant les related rows, drillable à son tour. |
 
 ### Phase 7 — Édition inline
 
@@ -430,18 +430,18 @@ model TableLayout {
 
 ## 10. Roadmap résumée
 
-| Phase | Contenu | Priorité |
-|---|---|---|
-| **Phase 1** | Auth (Better Auth, email/password) + invitations admin + dashboard connexions + chiffrement | 🔴 Critique |
-| **Phase 2** | Introspection du schéma + sidebar | 🔴 Critique |
-| **Phase 3** | Data grid + pagination + tri + vue détail | 🔴 Critique |
-| **Phase 4** | Partage de connexions (rôle viewer) + isolation par user | 🔴 Critique |
-| **Phase 5** | Filtrage type-aware + recherche | 🟠 Haute |
-| **Phase 6** | Navigation relationnelle (FK) + breadcrumb | 🟠 Haute |
-| **Phase 7** | Édition inline | 🟡 Moyenne |
-| **Phase 8** | Diagramme de schéma (React Flow) | 🟡 Moyenne |
-| **Phase 9** | Export CSV / JSON | 🟢 Basse |
-| **Phase 10** | Personnalisation des layouts | 🟢 Basse |
+| Phase | Contenu | Priorité | Statut |
+|---|---|---|---|
+| **Phase 1** | Auth (Better Auth, email/password) + invitations admin + dashboard connexions + chiffrement | 🔴 Critique | ✅ Terminée |
+| **Phase 2** | Introspection du schéma + sidebar | 🔴 Critique | ✅ Terminée |
+| **Phase 3** | Data grid + pagination + tri + vue détail | 🔴 Critique | ✅ Terminée |
+| **Phase 4** | Partage de connexions (rôle viewer) + isolation par user | 🔴 Critique | ⏳ À faire |
+| **Phase 5** | Filtrage type-aware + recherche | 🟠 Haute | 🚧 Foundation posée (#43) |
+| **Phase 6** | Navigation relationnelle (FK) | 🟠 Haute | ✅ Terminée |
+| **Phase 7** | Édition inline | 🟡 Moyenne | ⏳ À faire |
+| **Phase 8** | Diagramme de schéma (React Flow) | 🟡 Moyenne | ⏳ À faire |
+| **Phase 9** | Export CSV / JSON | 🟢 Basse | ⏳ À faire |
+| **Phase 10** | Personnalisation des layouts | 🟢 Basse | ⏳ À faire |
 
 ---
 
