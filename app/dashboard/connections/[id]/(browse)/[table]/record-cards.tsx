@@ -7,7 +7,7 @@ import type { ColumnInfo } from "@/lib/introspect"
 import { cn } from "@/lib/utils"
 import { Cell } from "./cell"
 import { ClickableCard } from "./clickable-card"
-import { isArrayColumn, looksLikeImageUrl, stringifyForTitle } from "@/lib/cell-format"
+import { isArrayColumn, looksLikeImageUrl, stringifyForClipboard, stringifyForTitle } from "@/lib/cell-format"
 import { fkLabelKey, FkLabels, lookupFkLabel } from "@/lib/resolve-fks"
 import {
   humanizeTableName,
@@ -17,6 +17,7 @@ import {
   PageInverseRelations,
   pluralizeRecord,
 } from "@/lib/inverse-relations"
+import { CopyFieldButton } from "./copy-field-button"
 
 const VISIBLE_ITEMS = 6
 
@@ -99,6 +100,7 @@ export function RecordCards({
                   fk={fkIndex.get(col.name)}
                   fkLabels={fkLabels}
                   fkHrefs={fkHrefs}
+                  rowHref={rowHrefs[i]}
                 />
               ))}
               {visibleInverse.map((meta) => {
@@ -129,12 +131,14 @@ function FieldChip({
   fk,
   fkLabels,
   fkHrefs,
+  rowHref,
 }: {
   column: ColumnInfo
   value: unknown
   fk: ReturnType<FkIndex["get"]>
   fkLabels: FkLabels
   fkHrefs: Map<string, string>
+  rowHref: string
 }) {
   const isFk = Boolean(fk)
   const fkLabel = lookupFkLabel(fkLabels, fk, value)
@@ -143,11 +147,15 @@ function FieldChip({
   const isImage = !isFk && !isArrayColumn(column.udtName) && typeof value === "string" && looksLikeImageUrl(value)
 
   // Look up the pre-built FK href (null when value is null, orphan, composite,
-  // or just not an FK column). Drives the Link-vs-div wrapper below.
+  // or just not an FK column).
   const fkHref =
     isFk && fk && value !== null && value !== undefined
       ? (fkHrefs.get(fkLabelKey(fk.toSchema, fk.toTable, value)) ?? null)
       : null
+
+  // Clipboard string — computed server-side, lossless w.r.t. raw value.
+  // Null when the cell is null/undefined → we skip the copy affordance.
+  const clipboardValue = stringifyForClipboard(value)
 
   const chipBody = (
     <>
@@ -162,24 +170,42 @@ function FieldChip({
   )
 
   const classes = cn(
-    "block rounded-md border bg-card p-2",
+    "group relative block rounded-md border bg-card p-2",
     isFk && "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30",
     fkHref &&
       "transition hover:border-violet-300 hover:bg-violet-100/80 dark:hover:border-violet-800 dark:hover:bg-violet-950/50"
   )
 
-  // ClickableCard's parent Link sits in z-10 with pointer-events-auto; its
-  // children zone is pointer-events-none with `[&_a]:pointer-events-auto`, so
-  // this nested <a> intercepts the click before the row-card link and routes
-  // to the FK target panel instead of the source row's detail panel.
-  if (fkHref) {
-    return (
-      <Link href={fkHref} scroll={false} className={classes} aria-label={`Open ${fk!.toTable} detail`}>
-        {chipBody}
-      </Link>
-    )
-  }
-  return <div className={classes}>{chipBody}</div>
+  // Every chip is wrapped in a Link-overlay sandwich, even non-FK ones:
+  //
+  // - FK chip → Link targets the FK's detail panel (#40).
+  // - Non-FK chip → Link targets the row's own detail panel (same as the
+  //   ClickableCard's row-level Link). The duplication is what makes
+  //   `group-hover:opacity-100` on the copy button actually trigger — the
+  //   ClickableCard parent puts the chip body in a `pointer-events-none`
+  //   zone, so without a `pointer-events-auto` element covering the chip,
+  //   :hover never fires on `.group` and the icon stays invisible.
+  //
+  // For the non-FK duplicate we hide it from screen readers (`aria-hidden`)
+  // and skip it from the tab order (`tabIndex=-1`) so it doesn't pollute the
+  // accessibility tree — the parent row Link already announces the row.
+  const overlayHref = fkHref ?? rowHref
+  const isFkLink = fkHref !== null
+
+  return (
+    <div className={classes}>
+      <Link
+        href={overlayHref}
+        scroll={false}
+        aria-label={isFkLink ? `Open ${fk!.toTable} detail` : undefined}
+        aria-hidden={isFkLink ? undefined : true}
+        tabIndex={isFkLink ? undefined : -1}
+        className="absolute inset-0 z-10 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      />
+      <div className="pointer-events-none relative z-20 [&_button]:pointer-events-auto">{chipBody}</div>
+      {clipboardValue !== null && <CopyFieldButton value={clipboardValue} columnName={column.name} />}
+    </div>
+  )
 }
 
 function InverseRelationChip({ meta, count, href }: { meta: InverseRelationMeta; count: number; href: string | null }) {

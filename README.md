@@ -234,7 +234,7 @@ Lumos is built in 10 phases (see [PRD](./PRD.md) §5 for the detail). Status bel
 
 | Phase | Status |
 |---|---|
-| **1. Foundations** — auth (Better Auth, email/password), admin invitations, role-based access, AES-256-GCM credential encryption, connections dashboard | 🚧 Mostly done (Docker self-host deploy + `.env.example` pending) |
+| **1. Foundations** — auth (Better Auth, email/password), admin invitations, role-based access, AES-256-GCM credential encryption, connections dashboard | ✅ Done |
 | **2. Schema introspection** — auto-discovery of tables, columns, types, PKs, FKs, navigation sidebar | ✅ Done |
 | **3. Data browsing** — paginated table view, type-aware cell rendering, row detail panel | 🚧 In progress (sort, FK humanization, inverse relation counts, image previews to come) |
 | **4. Connection sharing** — owners share read-only access with viewers, credentials never exposed client-side | ⏳ Planned |

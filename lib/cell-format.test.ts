@@ -7,6 +7,7 @@ import {
   looksLikeUrl,
   normalizeDataType,
   previewJson,
+  stringifyForClipboard,
   truncate,
 } from "@/lib/cell-format"
 
@@ -166,5 +167,52 @@ describe("formatDate", () => {
   it("returns null for invalid input", () => {
     expect(formatDate("not a date", "timestamp")).toBeNull()
     expect(formatDate("", "date")).toBeNull()
+  })
+})
+
+describe("stringifyForClipboard", () => {
+  it("returns null for null/undefined", () => {
+    expect(stringifyForClipboard(null)).toBeNull()
+    expect(stringifyForClipboard(undefined)).toBeNull()
+  })
+
+  it("stringifies primitives", () => {
+    expect(stringifyForClipboard("hello")).toBe("hello")
+    expect(stringifyForClipboard(42)).toBe("42")
+    expect(stringifyForClipboard(0)).toBe("0")
+    expect(stringifyForClipboard(true)).toBe("true")
+    expect(stringifyForClipboard(false)).toBe("false")
+  })
+
+  it("returns Date as ISO 8601", () => {
+    const d = new Date("2025-05-12T07:34:00.000Z")
+    expect(stringifyForClipboard(d)).toBe("2025-05-12T07:34:00.000Z")
+  })
+
+  it("returns BigInt as base-10 string", () => {
+    // Constructor form (vs the `n` literal) keeps the test compatible with
+    // tsconfig targets below ES2020.
+    expect(stringifyForClipboard(BigInt("9007199254740993"))).toBe("9007199254740993")
+  })
+
+  it("JSON.stringifies plain objects and arrays", () => {
+    expect(stringifyForClipboard({ a: 1, b: "two" })).toBe('{"a":1,"b":"two"}')
+    expect(stringifyForClipboard([1, 2, 3])).toBe("[1,2,3]")
+  })
+
+  it("falls back to String() on cyclic objects", () => {
+    const cyclic: Record<string, unknown> = { name: "loop" }
+    cyclic.self = cyclic
+    // Don't assert the exact fallback string — just that it doesn't throw and
+    // doesn't return null (we have *some* value to put in the clipboard).
+    const out = stringifyForClipboard(cyclic)
+    expect(out).not.toBeNull()
+    expect(typeof out).toBe("string")
+  })
+
+  it("does NOT humanize FK values (passthrough on raw scalars)", () => {
+    // Sanity check: a UUID-ish string roundtrips as-is. The FK label resolution
+    // happens in Cell, not here — that's the whole point.
+    expect(stringifyForClipboard("a8f3c2d1-7e4b-4a99-b3c8-1f9e5d2a8b7c")).toBe("a8f3c2d1-7e4b-4a99-b3c8-1f9e5d2a8b7c")
   })
 })

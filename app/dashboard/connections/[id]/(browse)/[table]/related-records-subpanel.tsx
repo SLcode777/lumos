@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import type { ColumnInfo } from "@/lib/introspect"
 import { getTableIcon } from "@/lib/table-icon"
+import { CopyFieldButton } from "./copy-field-button"
 
 export type RelatedRecordCardData = {
   /** Stable React key — typically the row's stringified PK. */
@@ -23,7 +24,13 @@ export type RelatedRecordCardData = {
    * the target row's detail panel on the CURRENT route. Null otherwise →
    * chip stays as a visual-only `<div>`.
    */
-  fields: { column: ColumnInfo; isFk: boolean; content: React.ReactNode; fkHref: string | null }[]
+  fields: {
+    column: ColumnInfo
+    isFk: boolean
+    content: React.ReactNode
+    fkHref: string | null
+    clipboardValue: string | null
+  }[]
   /** Number of fields hidden under "+N more fields". */
   hiddenCount: number
   /** Where clicking the card navigates — pre-built via buildPanelHref (mode: "row"). */
@@ -142,8 +149,15 @@ export function RelatedRecordsSubPanel({ data, closeHref }: Props) {
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      {card.fields.map(({ column, content, isFk, fkHref }) => (
-                        <FieldChip key={column.name} column={column} isFk={isFk} fkHref={fkHref}>
+                      {card.fields.map(({ column, content, isFk, fkHref, clipboardValue }) => (
+                        <FieldChip
+                          key={column.name}
+                          column={column}
+                          isFk={isFk}
+                          fkHref={fkHref}
+                          cardHref={card.href}
+                          clipboardValue={clipboardValue}
+                        >
                           {content}
                         </FieldChip>
                       ))}
@@ -181,11 +195,15 @@ function FieldChip({
   column,
   isFk,
   fkHref,
+  cardHref,
+  clipboardValue,
   children,
 }: {
   column: ColumnInfo
   isFk: boolean
   fkHref: string | null
+  cardHref: string
+  clipboardValue: string | null
   children: React.ReactNode
 }) {
   const chipBody = (
@@ -195,22 +213,34 @@ function FieldChip({
     </>
   )
 
+  // Note: relative + group enable the absolute-positioned copy button + hover reveal.
   const classes =
-    "block rounded-md border bg-card p-2 " +
+    "group relative block rounded-md border bg-card p-2 " +
     (isFk ? "border-violet-200 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30 " : "") +
     (fkHref
       ? "transition hover:border-violet-300 hover:bg-violet-100/80 dark:hover:border-violet-800 dark:hover:bg-violet-950/50"
       : "")
 
-  // The parent card's overlay Link is pointer-events-auto, the children zone
-  // is pointer-events-none with `[&_a]:pointer-events-auto` — this nested <a>
-  // intercepts clicks before the card-level Link, routing to the FK target.
-  if (fkHref) {
-    return (
-      <Link href={fkHref} scroll={false} className={classes} aria-label={`Open ${column.name} target`}>
-        {chipBody}
-      </Link>
-    )
-  }
-  return <div className={classes}>{chipBody}</div>
+  // Every chip gets a Link-overlay sandwich. The non-FK overlay points to the
+  // parent card's own href — duplicate of the article's row-level Link, but
+  // necessary so `:hover` fires on `.group` (the article wrapper puts the chip
+  // body in a `pointer-events-none` zone, otherwise group-hover never matches
+  // outside of the copy button's own bounding box).
+  const overlayHref = fkHref ?? cardHref
+  const isFkLink = fkHref !== null
+
+  return (
+    <div className={classes}>
+      <Link
+        href={overlayHref}
+        scroll={false}
+        aria-label={isFkLink ? `Open ${column.name} target` : undefined}
+        aria-hidden={isFkLink ? undefined : true}
+        tabIndex={isFkLink ? undefined : -1}
+        className="absolute inset-0 z-10 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      />
+      <div className="pointer-events-none relative z-20 [&_button]:pointer-events-auto">{chipBody}</div>
+      {clipboardValue !== null && <CopyFieldButton value={clipboardValue} columnName={column.name} />}
+    </div>
+  )
 }

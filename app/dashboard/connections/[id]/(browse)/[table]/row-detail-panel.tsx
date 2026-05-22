@@ -11,6 +11,7 @@ import type { ColumnInfo } from "@/lib/introspect"
 import { getTableIcon } from "@/lib/table-icon"
 import { cn } from "@/lib/utils"
 import { humanizeTableName, InverseRelationMeta, pluralizeRecord } from "@/lib/inverse-relations"
+import { CopyFieldButton } from "./copy-field-button"
 
 export type PanelData = {
   title: string
@@ -24,8 +25,13 @@ export type PanelData = {
    * Link navigating to the target row's detail panel. Null otherwise (raw
    * value, orphan, null, composite) → card stays as a visual-only `<div>`.
    */
-  fields: { column: ColumnInfo; content: React.ReactNode; isFk: boolean; fkHref: string | null }[]
-  /**
+  fields: {
+    column: ColumnInfo
+    content: React.ReactNode
+    isFk: boolean
+    fkHref: string | null
+    clipboardValue: string | null
+  }[] /**
    * `href` is pre-built server-side. Non-null when count > 0 → the card is
    * rendered as a Link to the related sub-panel (mode `related`). Null when
    * count === 0 → card stays inert (visual-only).
@@ -153,7 +159,7 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto bg-muted/30 px-6 py-5">
-              {stableData.fields.map(({ column, content, isFk, fkHref }) => {
+              {stableData.fields.map(({ column, content, isFk, fkHref, clipboardValue }) => {
                 // Body is the same regardless of clickability — only the
                 // wrapping element (Link vs div) and a hover state differ.
                 const cardBody = (
@@ -172,25 +178,45 @@ export function RowDetailPanel({ data, closeHref, tableName }: Props) {
                 )
 
                 const classes = cn(
-                  "block rounded-xl border bg-card p-4 shadow-sm ring-1 ring-foreground/5",
+                  "group relative block rounded-xl border bg-card p-4 shadow-sm ring-1 ring-foreground/5",
                   isFk &&
                     "border-violet-200 bg-violet-50/60 ring-violet-200/40 dark:border-violet-900 dark:bg-violet-950/30 dark:ring-violet-900/30",
                   fkHref &&
                     "cursor-pointer transition hover:border-violet-300 hover:bg-violet-100/80 dark:hover:border-violet-800 dark:hover:bg-violet-950/50"
                 )
 
-                // No ClickableCard parent here (the panel is in its own Sheet),
-                // so the Link doesn't need the pointer-events trick. Simple wrap.
+                // FK + copy button → need the Link-overlay pattern (button can't
+                // be a child of <a>). No ClickableCard parent here (Sheet is its
+                // own surface), but we still need the same sandwich locally.
                 if (fkHref) {
                   return (
-                    <Link key={column.name} href={fkHref} scroll={false} className={classes}>
-                      {cardBody}
-                    </Link>
+                    <div key={column.name} className={classes}>
+                      <Link
+                        href={fkHref}
+                        scroll={false}
+                        className="absolute inset-0 z-10 rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                      />
+                      <div className="pointer-events-none relative z-20 [&_button]:pointer-events-auto">{cardBody}</div>
+                      {clipboardValue !== null && (
+                        <CopyFieldButton
+                          value={clipboardValue}
+                          columnName={column.name}
+                          className="top-2 right-2 h-7 w-7"
+                        />
+                      )}
+                    </div>
                   )
                 }
                 return (
                   <div key={column.name} className={classes}>
                     {cardBody}
+                    {clipboardValue !== null && (
+                      <CopyFieldButton
+                        value={clipboardValue}
+                        columnName={column.name}
+                        className="top-2 right-2 h-7 w-7"
+                      />
+                    )}
                   </div>
                 )
               })}

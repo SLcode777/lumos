@@ -152,3 +152,37 @@ export function stringifyForTitle(value: unknown): string {
   }
   return String(value)
 }
+
+/**
+ * Stringify a raw column value for clipboard copy.
+ *
+ * Returns `null` for null/undefined — the caller is expected to skip rendering
+ * the copy affordance entirely in that case (we don't paste empty strings into
+ * the user's clipboard silently).
+ *
+ * This is intentionally LOSSLESS w.r.t. the underlying scalar:
+ * - Dates → ISO 8601 (independent of the user's locale formatting in the cell).
+ * - Objects / arrays → JSON.stringify (no truncation, no preview).
+ * - Booleans → "true" / "false" (not the badge UI).
+ * - Numbers / uuids / text → String(value).
+ *
+ * Crucially, this does NOT apply any humanization (FK label resolution, image
+ * thumbnailing, JSON preview). When a FK column shows "The Gourmet Pantry" in
+ * the cell, the caller still passes us the raw FK id — and that's what ends
+ * up in the clipboard.
+ */
+export function stringifyForClipboard(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === "bigint") return value.toString()
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      // Cycles, BigInt inside an object, etc. Fallback rather than throw —
+      // a degraded string is still better than nothing.
+      return String(value)
+    }
+  }
+  return String(value)
+}

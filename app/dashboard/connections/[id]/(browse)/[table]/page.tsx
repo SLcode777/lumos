@@ -14,7 +14,7 @@ import { buildFkIndex } from "@/lib/fk-index"
 import { pickPrimaryField } from "@/lib/primary-fields"
 import { RecordCards } from "./record-cards"
 import { TableToolbar } from "./table-toolbar"
-import { stringifyForTitle } from "@/lib/cell-format"
+import { stringifyForClipboard, stringifyForTitle } from "@/lib/cell-format"
 import { encodeRowParam, findRowByParam } from "@/lib/row-id"
 import { Cell } from "./cell"
 import { RowDetailPanel, type PanelData } from "./row-detail-panel"
@@ -517,6 +517,7 @@ async function buildRowPanelData({
         column: col,
         isFk: Boolean(fkInfo),
         fkHref,
+        clipboardValue: stringifyForClipboard(value),
         content: <Cell value={value} column={col} mode="full" fkLabel={slot} />,
       }
     }),
@@ -680,6 +681,7 @@ async function buildRelatedPanelData({
           column: col,
           isFk: Boolean(fkInfo),
           fkHref,
+          clipboardValue: stringifyForClipboard(value),
           content: <Cell value={value} column={col} mode="compact" fkLabel={slot} />,
         }
       }),
