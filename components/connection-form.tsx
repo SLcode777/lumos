@@ -75,6 +75,10 @@ export function ConnectionForm({ mode, action, initialValues, submitLabel, trail
   // receives the real (unmasked) string regardless of toggle state.
   const [urlValue, setUrlValue] = useState(initialValues?.connectionString ?? "")
   const [showUrlPassword, setShowUrlPassword] = useState(false)
+  // While the textarea is focused we always show the real, editable value.
+  // Masking only kicks in when blurred (and the password isn't toggled on),
+  // so the field stays editable instead of locking behind `readOnly`.
+  const [urlFocused, setUrlFocused] = useState(false)
   const [showFieldsPassword, setShowFieldsPassword] = useState(false)
 
   const fieldErrors = state?.fieldErrors ?? {}
@@ -126,9 +130,10 @@ export function ConnectionForm({ mode, action, initialValues, submitLabel, trail
               // leaking it into FormData.
               rows={3}
               placeholder="postgresql://user:password@host:5432/database"
-              value={showUrlPassword ? urlValue : maskPasswordInUrl(urlValue)}
+              value={showUrlPassword || urlFocused ? urlValue : maskPasswordInUrl(urlValue)}
               onChange={(e) => setUrlValue(e.target.value)}
-              readOnly={!showUrlPassword}
+              onFocus={() => setUrlFocused(true)}
+              onBlur={() => setUrlFocused(false)}
               className="pr-10 font-mono text-sm"
               aria-invalid={fieldErrors.connectionString ? true : undefined}
             />
